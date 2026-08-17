@@ -1,7 +1,6 @@
-import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import appCss from "../style.css?url";
-import { Button } from "#components/ui/button";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -14,7 +13,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Samebase app",
+        title: "Score Four — a room game in three dimensions",
       },
     ],
     links: [
@@ -30,16 +29,6 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <nav className="mx-auto flex w-full max-w-2xl pt-2">
-        <Button asChild variant="link">
-          <Link to="/" activeOptions={{ exact: true }}>
-            Home
-          </Link>
-        </Button>
-        <Button asChild variant="link">
-          <Link to="/about">About</Link>
-        </Button>
-      </nav>
       <Outlet />
     </RootDocument>
   );
