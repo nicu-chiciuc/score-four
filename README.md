@@ -1,9 +1,12 @@
-# Samebase app
+# Score Four
 
-This repository is the starter app that Samebase copies into a new GitHub repository.
+Score Four is a guest-only, real-time board game with shareable rooms. It was built with Codex and
+Samebase.
 
-It is a small, complete app base. It includes working authentication, real-time data, sharing, and
-deployment paths without adding product-specific services that a new app might not need.
+[Watch the complete build on YouTube](https://youtu.be/UfxE8rvprqc).
+
+The app includes guest authentication, real-time game state, room sharing, and deployment through
+providers owned by the developer.
 
 For the complete provider setup, use the
 [Samebase do-it-yourself guide](https://samebase.com/docs/do-it-yourself). This README covers work
@@ -18,8 +21,8 @@ inside the repository.
 - Vite+ for development, formatting, linting, tests, and builds
 - Node.js 24 for application and automation code
 
-The example app is a public todo list. Guests can sign in without an external identity provider,
-create todos, see real-time updates, and scan a QR code to open the same list on another device.
+Guests can sign in without an external identity provider, create or join a room, and play together
+with real-time updates.
 
 ## Local development
 
