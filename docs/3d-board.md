@@ -6,7 +6,9 @@ The board uses Three.js 0.185 with its WebGL renderer. React owns the game state
 
 Three.js provides the geometry, materials, lighting, ray casting, and camera controls this small scene needs. Its WebGPU renderer can fall back to WebGL 2, but the [current Three.js manual](https://threejs.org/manual/en/webgpurenderer) still describes it as experimental and notes that some scenes perform better with WebGLRenderer. This board does not need compute shaders or a new post-processing pipeline. The simpler WebGL renderer is sufficient.
 
-The mesh and material resources are shared. The renderer runs only after a state change, a camera movement, resizing, or during a 280 ms bead drop. Reduced-motion preferences skip the drop animation. Pixel density is capped at 1.75. Unmounting disposes the controls, observers, animation frames, textures, geometry, lighting resources, and renderer.
+The mesh and material resources are shared. The renderer runs only after a state change, a board or camera movement, resizing, or during a 280 ms bead drop. Reduced-motion preferences skip the drop animation. Pixel density is capped at 1.75. Unmounting disposes the controls, observers, animation frames, textures, geometry, lighting resources, and renderer.
+
+Horizontal dragging turns the physical board beneath fixed lights; vertical dragging changes the camera elevation. The base, beads, pegs, move preview, win rings, and ray-cast targets share that rotation. HTML peg controls project from their transformed positions. Framing allows for every board angle, so turning does not move the camera. Reset and top view restore the board's original orientation. Two-finger gestures zoom without turning the board or placing a bead.
 
 Wood grain is generated locally, and beads are lathed from a profile with an actual center hole. No external image, model, font, or HDR download is required. The supplied photograph was a visual reference; it is not distributed with the app.
 
@@ -14,7 +16,7 @@ Wood grain is generated locally, and beads are lathed from a profile with an act
 
 A canvas alone does not expose a useful game state to a browser agent. The [HTML standard](https://html.spec.whatwg.org/multipage/canvas.html) recommends matching interactive canvas regions with focusable controls. This app uses ordinary HTML buttons over the projected pegs. The map displays those same buttons in a fixed grid.
 
-- Each peg has a stable coordinate, A1 through D4, independent of camera rotation.
+- Each peg has a stable coordinate, A1 through D4, independent of board rotation or camera elevation.
 - Each accessible name includes its complete stack, bottom to top, and the next legal move. For example: `A1, bottom to top: Maple, Walnut; drop Maple at level 3`.
 - `data-column`, `data-stack`, and `data-next-level` expose the same information to DOM tools. `data-stack` always has four entries, including empty levels.
 - `aria-disabled` marks full pegs, an opponent's turn, pending network operations, and completed rounds. The click handler also enforces that state. The online backend independently checks every move.

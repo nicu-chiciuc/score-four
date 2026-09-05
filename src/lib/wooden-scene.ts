@@ -137,6 +137,10 @@ export function createWoodenScene({
   controls.maxDistance = 23;
   controls.minPolarAngle = 0.06;
   controls.maxPolarAngle = Math.PI / 2.25;
+  controls.minAzimuthAngle = controls.maxAzimuthAngle = Math.atan2(
+    DEFAULT_CAMERA.x,
+    DEFAULT_CAMERA.z,
+  );
   controls.enableDamping = false;
   controls.rotateSpeed = 0.65;
   controls.zoomSpeed = 0.65;
@@ -167,6 +171,8 @@ export function createWoodenScene({
   fill.position.set(5, 4, -4);
   scene.add(fill);
 
+  const board = new Group();
+  scene.add(board);
   const maple = woodTexture("maple");
   const walnut = woodTexture("walnut");
   const oak = woodTexture("oak");
@@ -188,11 +194,11 @@ export function createWoodenScene({
   base.position.y = 0.06;
   base.castShadow = true;
   base.receiveShadow = true;
-  scene.add(base);
+  board.add(base);
   const bottom = new Mesh(new RoundedBoxGeometry(5.21, 0.12, 5.21, 3, 0.04), darkWood);
   bottom.position.y = -0.14;
   bottom.castShadow = true;
-  scene.add(bottom);
+  board.add(bottom);
 
   const floor = new Mesh(new PlaneGeometry(200, 200), new ShadowMaterial({ opacity: 0.19 }));
   floor.rotation.x = -Math.PI / 2;
@@ -213,21 +219,21 @@ export function createWoodenScene({
     peg.position.copy(columnPosition(column, BASE_TOP + (PEG_TOP - BASE_TOP) / 2));
     peg.castShadow = true;
     peg.receiveShadow = true;
-    scene.add(peg);
+    board.add(peg);
     const hole = new Mesh(holeGeometry, holeMaterial);
     hole.position.copy(columnPosition(column, BASE_TOP + 0.004));
     hole.rotation.x = -Math.PI / 2;
-    scene.add(hole);
+    board.add(hole);
     const picker = new Mesh(pickGeometry, pickMaterial);
     picker.position.copy(columnPosition(column, BASE_TOP + PEG_TOP / 2));
-    picker.updateMatrixWorld();
+    board.add(picker);
     pickers.push(picker);
     pickerColumns.set(picker, column);
   }
 
   const geometry = beadGeometry();
   const beads = new Group();
-  scene.add(beads);
+  board.add(beads);
   const pieces = new Map<number, { mesh: Mesh; color: BeadColor }>();
   const ghostMaterial = new MeshPhysicalMaterial({
     color: 0xe5bf82,
@@ -238,11 +244,11 @@ export function createWoodenScene({
   });
   const ghost = new Mesh(geometry, ghostMaterial);
   ghost.visible = false;
-  scene.add(ghost);
+  board.add(ghost);
   const haloGeometry = new TorusGeometry(0.385, 0.017, 8, 48);
   const haloMaterial = new MeshBasicMaterial({ color: 0x60796b });
   const halos = new Group();
-  scene.add(halos);
+  board.add(halos);
 
   let state: SceneState = {
     board: [],
@@ -269,7 +275,7 @@ export function createWoodenScene({
     }
     renderer.render(scene, camera);
     for (const [column, button] of targets) {
-      const projected = columnPosition(column, PEG_TOP + 0.31).project(camera);
+      const projected = board.localToWorld(columnPosition(column, PEG_TOP + 0.31)).project(camera);
       button.style.setProperty("--peg-x", `${(projected.x * 0.5 + 0.5) * width}px`);
       button.style.setProperty("--peg-y", `${(-projected.y * 0.5 + 0.5) * height}px`);
       button.style.zIndex = `${Math.round((1 - projected.z) * 1000)}`;
@@ -332,7 +338,8 @@ export function createWoodenScene({
 
   const raycaster = new Raycaster();
   const pointer = new Vector2();
-  let pointerStart: { x: number; y: number } | null = null;
+  const activePointers = new Set<number>();
+  let pointerStart: { id: number; x: number; y: number; rotation: number } | null = null;
   let dragged = false;
   function pick(event: PointerEvent) {
     const rect = canvas.getBoundingClientRect();
@@ -341,20 +348,28 @@ export function createWoodenScene({
       -((event.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(pointer, camera);
+    board.updateWorldMatrix(true, true);
     const hit = raycaster.intersectObjects(pickers)[0];
     return hit && hit.object instanceof Mesh ? (pickerColumns.get(hit.object) ?? null) : null;
   }
   function pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
-    pointerStart = { x: event.clientX, y: event.clientY };
-    dragged = false;
+    activePointers.add(event.pointerId);
+    dragged = activePointers.size > 1;
+    pointerStart = dragged
+      ? null
+      : { id: event.pointerId, x: event.clientX, y: event.clientY, rotation: board.rotation.y };
   }
   function pointerMove(event: PointerEvent) {
-    if (
-      pointerStart &&
-      Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6
-    )
-      dragged = true;
+    if (pointerStart?.id === event.pointerId) {
+      const dx = event.clientX - pointerStart.x;
+      if (Math.hypot(dx, event.clientY - pointerStart.y) > 6) dragged = true;
+      if (dragged) {
+        board.rotation.y =
+          pointerStart.rotation + (dx / height) * Math.PI * 2 * controls.rotateSpeed;
+        invalidate();
+      }
+    }
     const column = dragged ? null : pick(event);
     highlight(column);
     onHover(column);
@@ -365,20 +380,22 @@ export function createWoodenScene({
         : "grab";
   }
   function pointerUp(event: PointerEvent) {
-    if (pointerStart && !dragged && state.canDrop) {
+    if (pointerStart?.id === event.pointerId && !dragged && state.canDrop) {
       const column = pick(event);
       if (column !== null && columnCells(state.board, column).includes(null)) onDrop(column);
     }
+    activePointers.delete(event.pointerId);
     pointerStart = null;
-    dragged = false;
+    dragged = activePointers.size > 0;
   }
   function pointerLeave() {
     highlight(null);
     onHover(null);
   }
-  function pointerCancel() {
+  function pointerCancel(event: PointerEvent) {
+    activePointers.delete(event.pointerId);
     pointerStart = null;
-    dragged = false;
+    dragged = activePointers.size > 0;
     pointerLeave();
   }
   function contextLost(event: Event) {
@@ -392,10 +409,18 @@ export function createWoodenScene({
   canvas.addEventListener("pointercancel", pointerCancel);
   canvas.addEventListener("webglcontextlost", contextLost);
   controls.addEventListener("change", invalidate);
-  const framingPoints = [
-    ...Array.from({ length: COLUMNS }, (_, column) => columnPosition(column, PEG_TOP + 0.58)),
-    ...[-2.77, 2.77].flatMap((x) => [-2.77, 2.77].map((z) => new Vector3(x, -0.22, z))),
-  ];
+  // Fit the full turning envelope so rotating does not clip corners or move the camera.
+  const framingPoints = Array.from({ length: 32 }, (_, index) => {
+    const angle = (index / 32) * Math.PI * 2;
+    return [
+      new Vector3(Math.cos(angle) * 2.77 * Math.SQRT2, -0.22, Math.sin(angle) * 2.77 * Math.SQRT2),
+      new Vector3(
+        Math.cos(angle) * SPACING * 1.5 * Math.SQRT2,
+        PEG_TOP + 0.58,
+        Math.sin(angle) * SPACING * 1.5 * Math.SQRT2,
+      ),
+    ];
+  }).flat();
   function fitBoard() {
     const direction = camera.position.clone().sub(controls.target).normalize();
     for (let distance = 9; distance < 28; distance += 0.25) {
@@ -426,7 +451,12 @@ export function createWoodenScene({
   resize.observe(host);
 
   function setView(view: "perspective" | "top") {
+    board.rotation.y = 0;
     camera.position.copy(view === "top" ? new Vector3(0, 15, 0.01) : DEFAULT_CAMERA);
+    controls.minAzimuthAngle = controls.maxAzimuthAngle = Math.atan2(
+      camera.position.x,
+      camera.position.z,
+    );
     controls.target.set(0, 1.35, 0);
     fitBoard();
     invalidate();
