@@ -100,6 +100,18 @@ function HomePage() {
           </p>
         </Dialog>
       ) : null}
+      <footer className="samebase-footer">
+        <a
+          className="samebase-attribution"
+          href="https://samebase.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Managed with
+          <img src="/samebase.svg" alt="" width={16} height={16} />
+          Samebase
+        </a>
+      </footer>
     </main>
   );
 }
