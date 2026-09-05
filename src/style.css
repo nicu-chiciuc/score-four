@@ -642,7 +642,7 @@ input {
     max-width: 500px;
   }
   .table .board-viewport {
-    height: clamp(350px, calc(100svh - 320px), 670px);
+    height: clamp(350px, calc(100svh - 364px), 670px);
   }
 }
 @media (max-width: 600px) {
