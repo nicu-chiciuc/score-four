@@ -1,7 +1,6 @@
 # Score Four
 
-Score Four is a guest-only, real-time board game with shareable rooms. It was built with Codex and
-Samebase.
+Score Four is a wooden 3D board game for two players. Play on one device or share a room for real-time online play. It was built with Codex and Samebase.
 
 [Watch the complete build on YouTube](https://youtu.be/UfxE8rvprqc).
 
@@ -16,6 +15,7 @@ inside the repository.
 
 - React 19 and TanStack Start in SPA mode
 - Convex for the real-time backend, database, and guest authentication
+- Three.js for the wooden board, lighting, and camera controls
 - Cloudflare Workers Static Assets for delivery
 - shadcn/ui primitives for the user interface
 - Vite+ for development, formatting, linting, tests, and builds
@@ -23,6 +23,8 @@ inside the repository.
 
 Guests can sign in without an external identity provider, create or join a room, and play together
 with real-time updates.
+
+The board also has HTML peg controls and a compact map, so keyboard users and browser agents can read every stack and make moves. See [the renderer and accessibility notes](./docs/3d-board.md).
 
 ## Local development
 
