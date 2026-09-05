@@ -41,17 +41,20 @@ function columnPosition(column: number, y: number) {
   return new Vector3(((column % 4) - 1.5) * SPACING, y, (Math.floor(column / 4) - 1.5) * SPACING);
 }
 
-function woodTexture(dark: boolean) {
+function woodTexture(wood: "maple" | "walnut" | "oak") {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not prepare the wood material.");
   const pixels = ctx.createImageData(512, 512);
-  const base = dark ? [95, 51, 29] : [208, 171, 112];
+  const base = wood === "walnut" ? [95, 51, 29] : wood === "oak" ? [140, 99, 63] : [208, 171, 112];
   for (let y = 0; y < 512; y++) {
     for (let x = 0; x < 512; x++) {
-      const warp = x + 9 * Math.sin(y * 0.012) + 4 * Math.sin(y * 0.037 + x * 0.01);
+      const warp =
+        wood === "oak"
+          ? x * 0.62 + 3 * Math.sin(y * 0.008) + 2 * Math.sin(y * 0.021 + x * 0.007)
+          : x + 9 * Math.sin(y * 0.012) + 4 * Math.sin(y * 0.037 + x * 0.01);
       const grain = Math.sin(warp * 0.23 + Math.sin(warp * 0.067) * 2);
       const fine = Math.sin(warp * 1.73 + y * 0.004) * 1.6;
       const pore = Math.pow(Math.max(0, Math.sin(warp * 0.57 + Math.sin(y * 0.019))), 18) * 10;
@@ -164,8 +167,9 @@ export function createWoodenScene({
   fill.position.set(5, 4, -4);
   scene.add(fill);
 
-  const maple = woodTexture(false);
-  const walnut = woodTexture(true);
+  const maple = woodTexture("maple");
+  const walnut = woodTexture("walnut");
+  const oak = woodTexture("oak");
   const makeWood = (texture: Texture, roughness: number) =>
     new MeshPhysicalMaterial({
       map: texture,
@@ -177,7 +181,9 @@ export function createWoodenScene({
     });
   const lightWood = makeWood(maple, 0.42);
   const darkWood = makeWood(walnut, 0.39);
-  const baseWood = makeWood(maple, 0.47);
+  const baseWood = makeWood(oak, 0.68);
+  baseWood.clearcoat = 0.04;
+  baseWood.clearcoatRoughness = 0.75;
   const base = new Mesh(new RoundedBoxGeometry(5.42, 0.36, 5.42, 4, 0.09), baseWood);
   base.position.y = 0.06;
   base.castShadow = true;
@@ -451,6 +457,7 @@ export function createWoodenScene({
     materials.forEach((item) => item.dispose());
     maple.dispose();
     walnut.dispose();
+    oak.dispose();
     environment.dispose();
     sun.shadow.dispose();
     renderer.dispose();
