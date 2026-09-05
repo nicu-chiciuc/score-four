@@ -1,920 +1,568 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import {
-  ArrowUpRight,
-  Check,
-  Clipboard,
-  Dices,
-  Link2,
-  RefreshCw,
-  Share2,
-  Sparkles,
-} from "lucide-react";
-import {
-  type CSSProperties,
-  type FormEvent,
-  type KeyboardEvent,
-  type PointerEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ArrowLeft, ArrowRight, Check, Copy, HelpCircle, RotateCcw, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
+import { WoodenBoard } from "../components/wooden-board";
 import { ConvexClientProvider } from "../lib/convex";
+import { emptyPosition, playLocalMove, PREVIEW_BOARD, WOOD_NAMES } from "../lib/game";
+import type { BeadColor, Position, Room } from "../lib/game";
 
-type Color = "ember" | "cobalt";
-type Cell = Color | null;
-type GameStatus = "waiting" | "playing" | "won" | "draw";
-
-type GameState = {
-  roomKey: string;
-  board: Cell[];
-  players: Array<{
-    name: string;
-    color: Color;
-    isViewer: boolean;
-  }>;
-  status: GameStatus;
-  currentColor: Color;
-  winner: Color | null;
-  winningLine: number[] | null;
-};
-
-const BOARD_SIZE = 4;
-const COLUMN_COUNT = BOARD_SIZE * BOARD_SIZE;
-const BOARD_SPACING = 76;
-const BOARD_SPAN = BOARD_SPACING * (BOARD_SIZE - 1);
-const COLUMN_LABELS = Array.from({ length: COLUMN_COUNT }, (_, index) => {
-  const row = String.fromCharCode(65 + Math.floor(index / BOARD_SIZE));
-  const column = (index % BOARD_SIZE) + 1;
-  return row + column;
-});
-
-export const Route = createFileRoute("/")({
-  component: HomePage,
-});
+export const Route = createFileRoute("/")({ component: HomePage });
+type Screen = { kind: "lobby" } | { kind: "local" } | { kind: "online"; roomKey: string };
 
 function HomePage() {
-  return (
-    <ConvexClientProvider>
-      <GameSession />
-    </ConvexClientProvider>
-  );
-}
-
-function GameSession() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
-  const { signIn } = useAuthActions();
-  const [sessionStarted, setSessionStarted] = useState(false);
-  const [sessionError, setSessionError] = useState("");
-
+  const [screen, setScreen] = useState<Screen>({ kind: "lobby" });
+  const [rulesOpen, setRulesOpen] = useState(false);
   useEffect(() => {
-    if (isLoading || isAuthenticated || sessionStarted) {
-      return;
-    }
-
-    setSessionStarted(true);
-    void signIn("anonymous").catch((error: unknown) => {
-      setSessionError(error instanceof Error ? error.message : "Could not start a guest session.");
-    });
-  }, [isAuthenticated, isLoading, sessionStarted, signIn]);
-
-  if (isLoading || (!isAuthenticated && !sessionError)) {
-    return <LoadingScreen />;
-  }
-
-  if (sessionError) {
-    return (
-      <AppChrome>
-        <section className="state-card state-card--error">
-          <span className="eyebrow">Connection interrupted</span>
-          <h1>Could not open the table.</h1>
-          <p>{sessionError}</p>
-          <button className="button button--primary" onClick={() => window.location.reload()}>
-            Try again <RefreshCw size={16} />
-          </button>
-        </section>
-      </AppChrome>
-    );
-  }
-
-  return <RoomApp />;
-}
-
-function RoomApp() {
-  const [roomKey, setRoomKey] = useState("");
-  const [name, setName] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [isWorking, setIsWorking] = useState(false);
-
-  const game = useQuery(api.games.get, roomKey ? { roomKey } : "skip") as
-    | GameState
-    | null
-    | undefined;
-  const createGame = useMutation(api.games.create);
-  const joinGame = useMutation(api.games.join);
-  const dropBead = useMutation(api.games.drop);
-  const resetGame = useMutation(api.games.reset);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const nextRoomKey = params.get("room")?.trim().toUpperCase() ?? "";
-    setRoomKey(nextRoomKey);
-    setName(window.localStorage.getItem("score-four-name") ?? "");
+    const readLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const roomKey = params.get("room")?.trim().toUpperCase();
+      setScreen(
+        roomKey
+          ? { kind: "online", roomKey }
+          : params.get("play") === "local"
+            ? { kind: "local" }
+            : { kind: "lobby" },
+      );
+    };
+    readLocation();
+    window.addEventListener("popstate", readLocation);
+    return () => window.removeEventListener("popstate", readLocation);
   }, []);
-
-  const saveName = (nextName: string) => {
-    const safeName = nextName.trim().slice(0, 24);
-    if (safeName) {
-      window.localStorage.setItem("score-four-name", safeName);
-    }
-    return safeName || "Guest";
-  };
-
-  const goToRoom = (nextRoomKey: string) => {
+  const navigate = (next: Screen) => {
     const url = new URL(window.location.href);
-    url.search = nextRoomKey ? "?room=" + nextRoomKey : "";
+    url.search =
+      next.kind === "online" && next.roomKey
+        ? `?room=${next.roomKey}`
+        : next.kind === "local"
+          ? "?play=local"
+          : "";
     window.history.pushState({}, "", url);
-    setRoomKey(nextRoomKey);
+    setScreen(next);
   };
-
-  const runAction = async (action: () => Promise<void>) => {
-    setActionError("");
-    setIsWorking(true);
-    try {
-      await action();
-    } catch (error: unknown) {
-      setActionError(error instanceof Error ? error.message : "That move could not be made.");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const createRoom = async (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
-    const safeName = saveName(name);
-    await runAction(async () => {
-      const result = await createGame({ name: safeName });
-      goToRoom(result.roomKey);
-    });
-  };
-
-  const joinRoom = async (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
-    const safeName = saveName(name);
-    await runAction(async () => {
-      await joinGame({ roomKey, name: safeName });
-    });
-  };
-
-  const handleDrop = async (column: number) => {
-    await runAction(async () => {
-      await dropBead({ roomKey, column });
-    });
-  };
-
-  const handleReset = async () => {
-    await runAction(async () => {
-      await resetGame({ roomKey });
-    });
-  };
-
-  if (!roomKey) {
-    return (
-      <AppChrome>
-        <LandingPage
-          name={name}
-          setName={setName}
-          onCreate={createRoom}
-          isWorking={isWorking}
-          actionError={actionError}
-        />
-      </AppChrome>
-    );
-  }
-
-  if (game === undefined) {
-    return (
-      <AppChrome>
-        <LoadingScreen compact />
-      </AppChrome>
-    );
-  }
-
-  if (game === null) {
-    return (
-      <AppChrome>
-        <section className="state-card">
-          <span className="eyebrow">Room not found</span>
-          <h1>That table has drifted off the map.</h1>
-          <p>Deal a fresh board and send one clean link to your friend.</p>
-          <button className="button button--primary" onClick={() => goToRoom("")}>
-            Deal a new board <ArrowUpRight size={16} />
-          </button>
-        </section>
-      </AppChrome>
-    );
-  }
-
-  const viewer = game.players.find((player) => player.isViewer);
-  if (!viewer) {
-    return (
-      <AppChrome>
-        <JoinRoom
-          game={game}
-          name={name}
-          setName={setName}
-          onJoin={joinRoom}
-          isWorking={isWorking}
-          actionError={actionError}
-          onBack={() => goToRoom("")}
-        />
-      </AppChrome>
-    );
-  }
-
-  return (
-    <AppChrome>
-      <PlayRoom
-        game={game}
-        viewer={viewer}
-        roomKey={roomKey}
-        isWorking={isWorking}
-        actionError={actionError}
-        onDrop={handleDrop}
-        onReset={handleReset}
-        onBack={() => goToRoom("")}
-      />
-    </AppChrome>
-  );
-}
-
-function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <main className="app-shell">
-      <div className="shell-glow shell-glow--one" />
-      <div className="shell-glow shell-glow--two" />
-      <div className="app-width">{children}</div>
+      <header className="app-header">
+        <button
+          className="brand"
+          onClick={() => navigate({ kind: "lobby" })}
+          aria-label="Score Four home"
+        >
+          <span className="brand-mark" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>
+            Score Four<span className="brand-period">.</span>
+          </span>
+        </button>
+        <button className="quiet-button" onClick={() => setRulesOpen(true)}>
+          <HelpCircle size={16} /> How to play
+        </button>
+      </header>
+      {screen.kind === "lobby" ? (
+        <Lobby
+          onLocal={() => navigate({ kind: "local" })}
+          onOnline={() => navigate({ kind: "online", roomKey: "" })}
+        />
+      ) : screen.kind === "local" ? (
+        <LocalTable onBack={() => navigate({ kind: "lobby" })} />
+      ) : (
+        <ConvexClientProvider>
+          <OnlineSession
+            roomKey={screen.roomKey}
+            onRoom={(roomKey) => navigate({ kind: "online", roomKey })}
+            onBack={() => navigate({ kind: "lobby" })}
+          />
+        </ConvexClientProvider>
+      )}
+      {rulesOpen ? (
+        <Dialog title="How to play" onClose={() => setRulesOpen(false)}>
+          <div className="rule-beads" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+          <p>Take turns placing a bead on any peg with space. Each peg holds four beads.</p>
+          <p>
+            Make a straight line of four of your beads to win: across, up, or diagonally through the
+            board.
+          </p>
+          <p className="muted">
+            Drag to turn the board. Use the map to see every stack. With a keyboard, use the arrow
+            keys between pegs and Enter to play.
+          </p>
+        </Dialog>
+      ) : null}
     </main>
   );
 }
 
-function LandingPage({
-  name,
-  setName,
-  onCreate,
-  isWorking,
-  actionError,
-}: {
-  name: string;
-  setName: (value: string) => void;
-  onCreate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  isWorking: boolean;
-  actionError: string;
-}) {
+function Lobby({ onLocal, onOnline }: { onLocal: () => void; onOnline: () => void }) {
   return (
-    <section className="landing">
-      <div className="landing-copy">
-        <div className="brand-lockup">
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>Score Four</span>
-        </div>
-
-        <span className="eyebrow">A room game in three dimensions</span>
+    <section className="lobby">
+      <div className="lobby-heading">
         <h1>
-          Make a line.
+          Four in a row.
           <br />
-          <em>In the air.</em>
+          <span>In any direction.</span>
         </h1>
-        <p className="landing-lede">
-          A small board with a lot of room to think. Drop four beads into a straight line across,
-          up, or through the middle.
-        </p>
-
-        <form className="start-form" onSubmit={onCreate}>
-          <label htmlFor="player-name">Your name on the board</label>
-          <div className="start-form__row">
-            <input
-              id="player-name"
-              value={name}
-              maxLength={24}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Mina"
-              autoComplete="nickname"
-            />
-            <button className="button button--primary" disabled={isWorking} type="submit">
-              {isWorking ? "Dealing..." : "Deal a room"} <ArrowUpRight size={17} />
-            </button>
-          </div>
-        </form>
-
-        {actionError ? <ErrorNotice message={actionError} /> : null}
-
-        <div className="trust-line">
-          <Sparkles size={15} />
-          <span>No accounts. One room link. Live moves.</span>
-        </div>
       </div>
-
-      <HeroBoard />
+      <WoodenBoard board={PREVIEW_BOARD} preview />
+      <div className="lobby-actions">
+        <button className="primary-button" onClick={onLocal}>
+          Play on this device <ArrowRight size={17} />
+        </button>
+        <button className="secondary-button" onClick={onOnline}>
+          Invite a friend
+        </button>
+      </div>
     </section>
   );
 }
 
-function HeroBoard() {
+function LocalTable({ onBack }: { onBack: () => void }) {
+  const [history, setHistory] = useState<Position[]>([emptyPosition()]);
+  const [resetOpen, setResetOpen] = useState(false);
+  const game = history[history.length - 1];
+  const status =
+    game.status === "won" && game.winner
+      ? `${WOOD_NAMES[game.winner]} wins`
+      : game.status === "draw"
+        ? "A draw"
+        : `${WOOD_NAMES[game.currentColor]}'s turn`;
+  const finished = game.status !== "playing";
   return (
-    <div className="hero-board-wrap" aria-label="A preview of the four by four by four board">
-      <div className="hero-board__note">the little cube</div>
-      <div className="hero-board">
-        <div className="hero-board__shadow" />
-        <div className="hero-board__grid">
-          {Array.from({ length: 16 }, (_, index) => (
-            <div className="hero-column" key={index}>
-              <span className="hero-slot hero-slot--empty" />
-              <span className="hero-slot hero-slot--empty" />
-              <span className="hero-slot hero-slot--cobalt" />
-              <span className="hero-slot hero-slot--ember" />
-            </div>
-          ))}
-        </div>
-        <div className="hero-board__edge hero-board__edge--left" />
-        <div className="hero-board__edge hero-board__edge--right" />
+    <section
+      className="table"
+      data-game-status={game.status}
+      data-current-player={WOOD_NAMES[game.currentColor].toLowerCase()}
+    >
+      <div className="table-bar">
+        <button className="quiet-button" onClick={onBack}>
+          <ArrowLeft size={16} /> Back
+        </button>
+        <span className="table-mode">On this device</span>
+        <button
+          className="quiet-button"
+          disabled={history.length === 1}
+          onClick={() => setHistory((value) => value.slice(0, -1))}
+        >
+          Undo
+        </button>
       </div>
-      <div className="hero-board__caption">
-        <span>4 × 4 columns</span>
-        <span>4 deep</span>
+      <TableStatus color={game.winner ?? game.currentColor} status={status} />
+      <WoodenBoard
+        board={game.board}
+        winningLine={game.winningLine ?? []}
+        canDrop={!finished}
+        currentColor={game.currentColor}
+        onDrop={(column) =>
+          setHistory((value) => [...value, playLocalMove(value[value.length - 1], column)])
+        }
+      />
+      <div className="table-footer">
+        <Player color="ember" name="Maple" active={!finished && game.currentColor === "ember"} />
+        <button
+          className={finished ? "primary-button" : "quiet-button"}
+          onClick={() =>
+            finished || history.length === 1 ? setHistory([emptyPosition()]) : setResetOpen(true)
+          }
+        >
+          <RotateCcw size={15} /> {finished ? "Play again" : "New game"}
+        </button>
+        <Player color="cobalt" name="Walnut" active={!finished && game.currentColor === "cobalt"} />
       </div>
-    </div>
+      {resetOpen ? (
+        <Dialog title="Start a new game?" onClose={() => setResetOpen(false)}>
+          <p>This clears the current board.</p>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setHistory([emptyPosition()]);
+              setResetOpen(false);
+            }}
+          >
+            New game <ArrowRight size={16} />
+          </button>
+        </Dialog>
+      ) : null}
+    </section>
   );
 }
 
-function JoinRoom({
-  game,
-  name,
-  setName,
-  onJoin,
-  isWorking,
-  actionError,
+function OnlineSession({
+  roomKey,
+  onRoom,
   onBack,
 }: {
-  game: GameState;
-  name: string;
-  setName: (value: string) => void;
-  onJoin: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  isWorking: boolean;
-  actionError: string;
+  roomKey: string;
+  onRoom: (key: string) => void;
   onBack: () => void;
 }) {
-  return (
-    <section className="join-page">
-      <button className="text-button" onClick={onBack}>
-        <span aria-hidden="true">←</span> Back to lobby
-      </button>
-      <div className="join-card">
-        <div className="join-card__cube">
-          <Dices size={38} strokeWidth={1.3} />
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { signIn } = useAuthActions();
+  const [error, setError] = useState("");
+  const started = useRef(false);
+  useEffect(() => {
+    if (isLoading || isAuthenticated || started.current) return;
+    started.current = true;
+    void signIn("anonymous").catch((cause: unknown) => setError(errorMessage(cause)));
+  }, [isLoading, isAuthenticated, signIn]);
+  if (!isAuthenticated)
+    return (
+      <section className="connection-state">
+        <h1>{error ? "Could not connect" : "Opening your table…"}</h1>
+        {error ? (
+          <>
+            <ErrorNotice message={error} />
+            <button className="secondary-button" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+          </>
+        ) : (
+          <p className="muted">Starting a guest session.</p>
+        )}
+        <button className="quiet-button" onClick={onBack}>
+          <ArrowLeft size={16} /> Back
+        </button>
+      </section>
+    );
+  return <OnlineRoom roomKey={roomKey} onRoom={onRoom} onBack={onBack} />;
+}
+
+function OnlineRoom({
+  roomKey,
+  onRoom,
+  onBack,
+}: {
+  roomKey: string;
+  onRoom: (key: string) => void;
+  onBack: () => void;
+}) {
+  const game = useQuery(api.games.get, roomKey ? { roomKey } : "skip");
+  const create = useMutation(api.games.create);
+  const join = useMutation(api.games.join);
+  const drop = useMutation(api.games.drop);
+  const reset = useMutation(api.games.reset);
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  useEffect(() => {
+    try {
+      setName(window.localStorage.getItem("score-four-name") ?? "");
+    } catch {
+      /* Storage is optional for guests. */
+    }
+  }, []);
+  const action = async (run: () => Promise<unknown>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await run();
+    } catch (cause: unknown) {
+      setError(errorMessage(cause));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+  const enter = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const safeName = name.trim().slice(0, 24) || "Guest";
+    try {
+      window.localStorage.setItem("score-four-name", safeName);
+    } catch {
+      /* Play without saving the name. */
+    }
+    void action(async () => {
+      if (roomKey) await join({ roomKey, name: safeName });
+      else onRoom((await create({ name: safeName })).roomKey);
+    });
+  };
+  if (roomKey && game === undefined)
+    return (
+      <section className="connection-state" role="status">
+        <h1>Opening the room…</h1>
+      </section>
+    );
+  if (roomKey && game === null)
+    return (
+      <section className="connection-state">
+        <h1>Room not found</h1>
+        <p>Check the invite link or start a new room.</p>
+        <button className="secondary-button" onClick={() => onRoom("")}>
+          New room
+        </button>
+      </section>
+    );
+  const viewer = game?.players.find((player) => player.isViewer);
+  if (!roomKey || (game && !viewer)) {
+    const full = game && game.players.length >= 2;
+    return (
+      <section className="entry-page">
+        <button className="quiet-button entry-back" onClick={onBack}>
+          <ArrowLeft size={16} /> Back
+        </button>
+        <div className="entry-board">
+          <WoodenBoard board={game?.board ?? PREVIEW_BOARD} preview />
         </div>
-        <span className="eyebrow">You were invited</span>
-        <h1>Take the other side.</h1>
-        <p>
-          {game.players[0]?.name ?? "Someone"} is waiting at table <strong>{game.roomKey}</strong>.
-        </p>
-        <form className="join-form" onSubmit={onJoin}>
-          <label htmlFor="join-name">Name on the board</label>
-          <input
-            id="join-name"
-            value={name}
-            maxLength={24}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Sol"
-            autoComplete="nickname"
-            autoFocus
-          />
-          <button
-            className="button button--primary button--wide"
-            disabled={isWorking}
-            type="submit"
-          >
-            {isWorking ? "Joining..." : "Join the room"} <ArrowUpRight size={17} />
-          </button>
+        <form className="entry-form" onSubmit={enter}>
+          <h1>{full ? "This room is full" : roomKey ? "Take a seat." : "Bring a friend."}</h1>
+          <p className="muted">
+            {full
+              ? "Start another room to play together."
+              : roomKey
+                ? `${game?.players[0]?.name ?? "Your friend"} invited you to play.`
+                : "Create a room and send them the link."}
+          </p>
+          {full ? (
+            <button type="button" className="primary-button" onClick={() => onRoom("")}>
+              New room
+            </button>
+          ) : (
+            <>
+              <label htmlFor="player-name">Your name</label>
+              <input
+                id="player-name"
+                autoComplete="nickname"
+                placeholder="Guest"
+                maxLength={24}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+              <button className="primary-button" type="submit" disabled={busy}>
+                {busy ? "Opening…" : roomKey ? "Join game" : "Create room"}
+                <ArrowRight size={16} />
+              </button>
+            </>
+          )}
+          {error ? <ErrorNotice message={error} /> : null}
         </form>
-        {actionError ? <ErrorNotice message={actionError} /> : null}
-        <div className="join-card__fineprint">No account or password needed.</div>
-      </div>
-    </section>
+      </section>
+    );
+  }
+  if (!game || !viewer) return null;
+  return (
+    <SharedTable
+      game={game}
+      viewer={viewer}
+      busy={busy}
+      error={error}
+      onBack={onBack}
+      onDrop={(column) => {
+        void action(() => drop({ roomKey, column }));
+      }}
+      onReset={() => {
+        void action(() => reset({ roomKey }));
+      }}
+    />
   );
 }
 
-function PlayRoom({
+function SharedTable({
   game,
   viewer,
-  roomKey,
-  isWorking,
-  actionError,
+  busy,
+  error,
   onDrop,
   onReset,
   onBack,
 }: {
-  game: GameState;
-  viewer: { name: string; color: Color; isViewer: boolean };
-  roomKey: string;
-  isWorking: boolean;
-  actionError: string;
-  onDrop: (column: number) => Promise<void>;
-  onReset: () => Promise<void>;
+  game: Room;
+  viewer: Room["players"][number];
+  busy: boolean;
+  error: string;
+  onDrop: (column: number) => void;
+  onReset: () => void;
   onBack: () => void;
 }) {
-  const [shareState, setShareState] = useState<"idle" | "copied" | "shared">("idle");
-  const viewerColor = viewer.color;
-  const isYourTurn = game.status === "playing" && game.currentColor === viewerColor;
-  const currentPlayer = game.players.find((player) => player.color === game.currentColor);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const [link, setLink] = useState("");
+  const isYourTurn = game.status === "playing" && viewer.color === game.currentColor;
+  const finished = game.status === "won" || game.status === "draw";
+  const current = game.players.find((player) => player.color === game.currentColor);
   const winner = game.players.find((player) => player.color === game.winner);
-  const filledCount = game.board.filter((cell) => cell !== null).length;
-  const winningLine = useMemo(() => new Set(game.winningLine ?? []), [game.winningLine]);
-
-  const shareRoom = async () => {
-    const url = window.location.href;
-    setShareState("idle");
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Score Four",
-          text: "Join my Score Four room.",
-          url,
-        });
-        setShareState("shared");
-        return;
-      } catch {
-        // The share sheet can be dismissed; keep the copy fallback available.
-      }
-    }
-
+  const status =
+    game.status === "waiting"
+      ? "Waiting for your friend"
+      : game.status === "won"
+        ? `${winner?.name ?? "Your friend"} wins`
+        : game.status === "draw"
+          ? "A draw"
+          : isYourTurn
+            ? "Your turn"
+            : `${current?.name ?? "Your friend"}'s turn`;
+  useEffect(() => {
+    setLink(window.location.href);
+  }, [game.roomKey]);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(url);
-      setShareState("copied");
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setCopyError("");
     } catch {
-      setShareState("idle");
+      setCopyError("Select and copy the invite link below.");
     }
   };
-
-  const statusCopy =
-    game.status === "waiting"
-      ? "Waiting for a second player"
-      : game.status === "won"
-        ? (winner?.name ?? "A player") + " closed the line"
-        : game.status === "draw"
-          ? "The cube is full — no line"
-          : isYourTurn
-            ? "Your drop"
-            : (currentPlayer?.name ?? "Opponent") + "'s drop";
-
   return (
-    <section className="room-page">
-      <header className="room-header">
-        <button className="brand-lockup brand-lockup--button" onClick={onBack}>
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>Score Four</span>
+    <section
+      className="table"
+      data-game-status={game.status}
+      data-current-player={WOOD_NAMES[game.currentColor].toLowerCase()}
+      aria-busy={busy}
+    >
+      <div className="table-bar">
+        <button className="quiet-button" onClick={onBack}>
+          <ArrowLeft size={16} /> Back
         </button>
-        <div className="room-header__actions">
-          <span className="room-chip">
-            <span className="room-chip__dot" />
-            Room {roomKey}
-          </span>
-          <button className="icon-button" title="Share this room" onClick={shareRoom}>
-            {shareState === "copied" || shareState === "shared" ? (
-              <Check size={17} />
-            ) : (
-              <Share2 size={17} />
-            )}
-          </button>
-        </div>
-      </header>
-
-      <div className="room-heading">
-        <div>
-          <span className="eyebrow">The cube is live</span>
-          <h1>Find the line before they do.</h1>
-        </div>
-        <div
-          className={"turn-status turn-status--" + (isYourTurn ? viewerColor : "quiet")}
-          aria-live="polite"
+        <span className="table-mode">Room {game.roomKey}</span>
+        <button
+          className="quiet-button"
+          onClick={() => {
+            void copyLink();
+          }}
         >
-          <span className="turn-status__bead" />
-          <span>{statusCopy}</span>
-        </div>
+          {copied ? <Check size={15} /> : <Copy size={15} />}
+          {copied ? "Copied" : "Invite"}
+        </button>
       </div>
-
-      {shareState === "copied" ? (
-        <div className="toast-line">
-          <Check size={15} /> Link copied — your friend can join from any browser.
-        </div>
-      ) : null}
-      {shareState === "shared" ? (
-        <div className="toast-line">
-          <Check size={15} /> Room shared.
-        </div>
-      ) : null}
-      {actionError ? <ErrorNotice message={actionError} /> : null}
-
-      <div className="game-layout">
-        <div className="board-card">
-          <div className="board-card__header">
-            <div>
-              <span className="eyebrow">Spatial board</span>
-              <h2>Drag to orbit</h2>
-            </div>
-            <div className="board-count">
-              <strong>{filledCount}</strong>
-              <span>/ 64 beads</span>
-            </div>
-          </div>
-
-          <Board3D
-            board={game.board}
-            winningLine={winningLine}
-            canDrop={isYourTurn && !isWorking}
-            currentColor={game.currentColor}
-            onDrop={onDrop}
+      <TableStatus color={game.winner ?? game.currentColor} status={status} />
+      {error ? <ErrorNotice message={error} /> : null}
+      {copyError ? (
+        <p className="copy-fallback" role="status">
+          {copyError}
+          <input
+            readOnly
+            aria-label="Room invite link"
+            value={link}
+            onFocus={(event) => event.currentTarget.select()}
           />
-
-          <div className="board-card__footer">
-            <span>
-              <span className="legend-bead legend-bead--ember" />
-              Ember
-            </span>
-            <span>
-              <span className="legend-bead legend-bead--cobalt" />
-              Cobalt
-            </span>
-            <span className="board-card__hint">Drag to rotate. Tap a floor tile to drop.</span>
-          </div>
-        </div>
-
-        <aside className="room-sidebar">
-          <section className="side-card side-card--players">
-            <div className="side-card__heading">
-              <span className="eyebrow">At the table</span>
-              <span className="live-dot">LIVE</span>
-            </div>
-            <div className="player-list">
-              {game.players.map((player) => (
-                <PlayerRow key={player.color} player={player} />
-              ))}
-              {game.players.length < 2 ? (
-                <div className="player-row player-row--empty">
-                  <span className="player-avatar player-avatar--empty">+</span>
-                  <span>
-                    <strong>Open seat</strong>
-                    <small>Send the room link</small>
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="side-card side-card--share">
-            <div className="side-icon">
-              <Link2 size={18} />
-            </div>
-            <div>
-              <span className="eyebrow">Invite a friend</span>
-              <p>One tap copies this room to your clipboard.</p>
-            </div>
-            <button className="button button--secondary button--wide" onClick={shareRoom}>
-              {shareState === "copied" ? "Copied" : "Copy room link"} <Clipboard size={16} />
-            </button>
-          </section>
-
-          <section className="side-card side-card--rules">
-            <div className="side-card__heading">
-              <span className="eyebrow">The short rules</span>
-              <Sparkles size={16} />
-            </div>
-            <ol>
-              <li>Choose any open column.</li>
-              <li>Your bead drops to the bottom.</li>
-              <li>Four in a straight line wins.</li>
-            </ol>
-            <p className="side-card__note">Lines can run flat, diagonal, or vertical.</p>
-          </section>
-
-          {game.status === "won" || game.status === "draw" ? (
-            <button
-              className="button button--primary button--wide"
-              disabled={isWorking}
-              onClick={onReset}
-            >
-              <RefreshCw size={16} /> New round
-            </button>
-          ) : null}
-        </aside>
+        </p>
+      ) : null}
+      <WoodenBoard
+        board={game.board}
+        winningLine={game.winningLine ?? []}
+        canDrop={isYourTurn && !busy}
+        currentColor={game.currentColor}
+        onDrop={onDrop}
+      />
+      <div className="table-footer">
+        {(["ember", "cobalt"] satisfies BeadColor[]).map((color) => {
+          const player = game.players.find((candidate) => candidate.color === color);
+          return (
+            <Player
+              key={color}
+              color={color}
+              name={player ? `${player.name}${player.isViewer ? " (you)" : ""}` : "Open seat"}
+              active={game.status === "playing" && game.currentColor === color}
+            />
+          );
+        })}
+        {game.status === "waiting" ? (
+          <button
+            className="primary-button"
+            onClick={() => {
+              void copyLink();
+            }}
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? "Link copied" : "Copy invite link"}
+          </button>
+        ) : null}
+        {finished ? (
+          <button className="primary-button" disabled={busy} onClick={onReset}>
+            <RotateCcw size={15} /> Play again
+          </button>
+        ) : null}
       </div>
-
-      <footer className="room-footer">
-        <span>
-          You are{" "}
-          <strong className={"inline-color inline-color--" + viewerColor}>{viewer.name}</strong>
-        </span>
-        <span>Room links are guest-only; keep yours private.</span>
-      </footer>
     </section>
   );
 }
 
-function Board3D({
-  board,
-  winningLine,
-  canDrop,
-  currentColor,
-  onDrop,
+function TableStatus({ color, status }: { color: BeadColor; status: string }) {
+  return (
+    <div className="table-status" role="status" aria-live="polite" aria-atomic="true">
+      <span className={`status-bead status-bead--${color}`} aria-hidden="true" />
+      <h1>{status}</h1>
+    </div>
+  );
+}
+
+function Player({ color, name, active }: { color: BeadColor; name: string; active: boolean }) {
+  return (
+    <div className={`player${active ? " player--active" : ""}`}>
+      <span className={`status-bead status-bead--${color}`} aria-hidden="true" />
+      <span>{name}</span>
+    </div>
+  );
+}
+
+function Dialog({
+  title,
+  onClose,
+  children,
 }: {
-  board: Cell[];
-  winningLine: Set<number>;
-  canDrop: boolean;
-  currentColor: Color;
-  onDrop: (column: number) => Promise<void>;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
 }) {
-  const [rotation, setRotation] = useState({ x: -18, y: 38 });
-  const [isDragging, setIsDragging] = useState(false);
-  const drag = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    rotationX: number;
-    rotationY: number;
-  } | null>(null);
-
-  const nextIndexByColumn = useMemo(
-    () =>
-      Array.from({ length: COLUMN_COUNT }, (_, column) => {
-        for (let level = 0; level < BOARD_SIZE; level += 1) {
-          const index = level * COLUMN_COUNT + column;
-          if (board[index] === null) {
-            return index;
-          }
-        }
-        return null;
-      }),
-    [board],
-  );
-
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) {
-      return;
-    }
-    if ((event.target as Element).closest("[data-column]")) {
-      return;
-    }
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      rotationX: rotation.x,
-      rotationY: rotation.y,
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current;
+    const previousFocus = document.activeElement;
+    element?.showModal();
+    return () => {
+      element?.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
-    setIsDragging(true);
-  };
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const activeDrag = drag.current;
-    if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    const deltaX = event.clientX - activeDrag.startX;
-    const deltaY = event.clientY - activeDrag.startY;
-    setRotation({
-      x: Math.max(-68, Math.min(18, activeDrag.rotationX - deltaY * 0.34)),
-      y: activeDrag.rotationY + deltaX * 0.42,
-    });
-  };
-
-  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
-    if (drag.current?.pointerId !== event.pointerId) {
-      return;
-    }
-    drag.current = null;
-    setIsDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const rotations: Partial<Record<string, { x: number; y: number }>> = {
-      ArrowUp: { x: Math.min(18, rotation.x + 8), y: rotation.y },
-      ArrowDown: { x: Math.max(-68, rotation.x - 8), y: rotation.y },
-      ArrowLeft: { x: rotation.x, y: rotation.y - 10 },
-      ArrowRight: { x: rotation.x, y: rotation.y + 10 },
-    };
-    const nextRotation = rotations[event.key];
-    if (!nextRotation) {
-      return;
-    }
-    event.preventDefault();
-    setRotation(nextRotation);
-  };
-
-  const boardStyle = {
-    "--board-rx": rotation.x + "deg",
-    "--board-ry": rotation.y + "deg",
-  } as CSSProperties;
-
+  }, []);
   return (
-    <div className="board3d">
-      <div className="board3d__toolbar">
-        <span>
-          <span className="board3d__drag-dot" />
-          Drag anywhere around the lattice
-        </span>
-        <button
-          type="button"
-          onClick={() => setRotation({ x: -18, y: 38 })}
-          aria-label="Reset board view"
-        >
-          <RefreshCw size={13} /> Reset view
+    <dialog
+      ref={dialog}
+      className="dialog"
+      aria-labelledby="dialog-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="dialog-content">
+        <button className="close-button" aria-label="Close" onClick={onClose}>
+          <X size={19} />
         </button>
+        <h2 id="dialog-title">{title}</h2>
+        {children}
       </div>
-
-      <div
-        className={"board3d__viewport" + (isDragging ? " board3d__viewport--dragging" : "")}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onKeyDown={onKeyDown}
-        tabIndex={0}
-        role="group"
-        aria-label="Draggable three-dimensional Score Four board"
-        aria-describedby="board-orbit-instructions"
-      >
-        <div className="board3d__orbit-ring board3d__orbit-ring--one" />
-        <div className="board3d__orbit-ring board3d__orbit-ring--two" />
-
-        <div className="board3d__world" style={boardStyle}>
-          {Array.from({ length: BOARD_SIZE }, (_, level) => (
-            <span
-              className="board3d__plane"
-              key={"plane-" + level}
-              style={{
-                transform: "translate3d(0, " + levelOffset(level) + "px, 0) rotateX(90deg)",
-              }}
-            />
-          ))}
-
-          {Array.from({ length: COLUMN_COUNT }, (_, column) => (
-            <span
-              className="board3d__rod"
-              key={"rod-" + column}
-              style={{
-                transform:
-                  "translate3d(" + columnX(column) + "px, 0, " + columnDepth(column) + "px)",
-              }}
-            />
-          ))}
-
-          {board.map((cell, index) => {
-            const column = index % COLUMN_COUNT;
-            const level = Math.floor(index / COLUMN_COUNT);
-            const isNext = nextIndexByColumn[column] === index;
-            const isWinning = winningLine.has(index);
-            return (
-              <span
-                className="board3d__point"
-                key={index}
-                style={{
-                  transform:
-                    "translate3d(" +
-                    columnX(column) +
-                    "px, " +
-                    levelOffset(level) +
-                    "px, " +
-                    columnDepth(column) +
-                    "px)",
-                }}
-              >
-                <span
-                  className={
-                    "board3d__point-face" +
-                    (cell ? " board3d__orb board3d__orb--" + cell : " board3d__node") +
-                    (isNext && canDrop
-                      ? " board3d__node--next board3d__node--" + currentColor
-                      : "") +
-                    (isWinning ? " board3d__orb--winning" : "")
-                  }
-                >
-                  {cell ? <span className="board3d__orb-shine" /> : null}
-                </span>
-              </span>
-            );
-          })}
-
-          {Array.from({ length: COLUMN_COUNT }, (_, column) => {
-            const isFull = nextIndexByColumn[column] === null;
-            return (
-              <button
-                type="button"
-                data-column={column}
-                className={
-                  "board3d__drop-pad" + (canDrop && !isFull ? " board3d__drop-pad--ready" : "")
-                }
-                disabled={!canDrop || isFull}
-                key={"pad-" + column}
-                onClick={() => void onDrop(column)}
-                style={{
-                  transform:
-                    "translate3d(" +
-                    columnX(column) +
-                    "px, " +
-                    (BOARD_SPAN / 2 + 31) +
-                    "px, " +
-                    columnDepth(column) +
-                    "px) rotateX(90deg)",
-                }}
-                aria-label={
-                  isFull
-                    ? "Column " + COLUMN_LABELS[column] + " is full"
-                    : "Drop in column " + COLUMN_LABELS[column]
-                }
-              >
-                <span>{COLUMN_LABELS[column]}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <span className="board3d__axis board3d__axis--height">height</span>
-        <span className="board3d__axis board3d__axis--depth">depth</span>
-      </div>
-
-      <div className="board3d__caption" id="board-orbit-instructions">
-        <span>4 wide</span>
-        <span>Drag or use arrow keys to rotate</span>
-        <span>4 high</span>
-      </div>
-    </div>
+    </dialog>
   );
 }
 
-function columnX(column: number) {
-  return ((column % BOARD_SIZE) - (BOARD_SIZE - 1) / 2) * BOARD_SPACING;
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
-
-function columnDepth(column: number) {
-  return (Math.floor(column / BOARD_SIZE) - (BOARD_SIZE - 1) / 2) * BOARD_SPACING;
-}
-
-function levelOffset(level: number) {
-  return ((BOARD_SIZE - 1) / 2 - level) * BOARD_SPACING;
-}
-
-function PlayerRow({ player }: { player: { name: string; color: Color; isViewer: boolean } }) {
-  return (
-    <div className="player-row">
-      <span className={"player-avatar player-avatar--" + player.color}>
-        <span />
-      </span>
-      <span className="player-row__name">
-        <strong>{player.name}</strong>
-        <small>{player.isViewer ? "You" : "Opponent"}</small>
-      </span>
-      {player.isViewer ? <span className="player-row__tag">YOU</span> : null}
-    </div>
-  );
-}
-
 function ErrorNotice({ message }: { message: string }) {
   return (
-    <div className="error-notice" role="alert">
-      <span>!</span>
-      <p>{message}</p>
-    </div>
-  );
-}
-
-function LoadingScreen({ compact = false }: { compact?: boolean }) {
-  return (
-    <AppChrome>
-      <section className={"loading-card" + (compact ? " loading-card--compact" : "")}>
-        <span className="loading-cube">
-          <span />
-          <span />
-          <span />
-        </span>
-        <span>{compact ? "Looking for the room..." : "Setting the table..."}</span>
-      </section>
-    </AppChrome>
+    <p className="error-notice" role="alert">
+      {message}
+    </p>
   );
 }
