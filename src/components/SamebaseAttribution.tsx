@@ -6,7 +6,7 @@ export function SamebaseAttribution() {
       rel="noopener noreferrer"
       className="group inline-flex min-h-11 items-center text-xs focus-visible:outline-current"
     >
-      <span className="flex items-center gap-1 border-b border-transparent group-hover:border-current">
+      <span className="border-b border-transparent whitespace-nowrap group-hover:border-current">
         Managed with{" "}
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -14,10 +14,11 @@ export function SamebaseAttribution() {
           width={15}
           height={15}
           shapeRendering="crispEdges"
+          className="inline-block align-[-0.125em]"
           aria-hidden="true"
         >
           <path d="M6 6h48v48H6z M22 22h16v16H22z" fill="currentColor" fillRule="evenodd" />
-        </svg>
+        </svg>{" "}
         <b>Samebase</b>
       </span>
     </a>
