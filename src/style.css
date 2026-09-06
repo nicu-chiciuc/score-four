@@ -681,7 +681,7 @@ input {
     font-size: 23px;
   }
   .table .board-viewport {
-    height: clamp(330px, calc(100svh - 310px), 610px);
+    height: clamp(330px, calc(100svh - 314px), 610px);
   }
   .table-footer {
     gap: 18px;
