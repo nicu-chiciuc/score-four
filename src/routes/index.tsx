@@ -101,7 +101,7 @@ function HomePage() {
           </p>
         </Dialog>
       ) : null}
-      <footer className="flex min-h-11 items-center justify-center px-2 text-[var(--muted)]">
+      <footer className="flex min-h-11 items-center justify-end px-2 text-[var(--muted)]">
         <SamebaseAttribution />
       </footer>
     </main>
