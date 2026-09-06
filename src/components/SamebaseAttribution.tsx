@@ -4,7 +4,7 @@ export function SamebaseAttribution() {
       href="https://samebase.com"
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex min-h-11 items-center text-xs focus-visible:outline-current"
+      className="group inline-flex min-h-11 items-center text-xs no-underline focus-visible:outline-current"
     >
       <span className="border-b border-transparent whitespace-nowrap group-hover:border-current">
         Managed with{" "}
@@ -15,11 +15,11 @@ export function SamebaseAttribution() {
             width="0.75em"
             height="0.75em"
             shapeRendering="crispEdges"
-            className="inline-block align-baseline"
+            className="inline-block align-baseline mr-[0.15em] -mb-[0.02em]"
             aria-hidden="true"
           >
             <path d="M0 0h60v60H0z M20 20h20v20H20z" fill="currentColor" fillRule="evenodd" />
-          </svg>{" "}
+          </svg>
           Samebase
         </b>
       </span>
