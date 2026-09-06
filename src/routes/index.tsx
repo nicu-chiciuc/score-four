@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { WoodenBoard } from "../components/wooden-board";
+import { SamebaseAttribution } from "../components/SamebaseAttribution";
 import { ConvexClientProvider } from "../lib/convex";
 import { emptyPosition, playLocalMove, PREVIEW_BOARD, WOOD_NAMES } from "../lib/game";
 import type { BeadColor, Position, Room } from "../lib/game";
@@ -100,17 +101,8 @@ function HomePage() {
           </p>
         </Dialog>
       ) : null}
-      <footer className="samebase-footer">
-        <a
-          className="samebase-attribution"
-          href="https://samebase.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Managed with
-          <img src="/samebase.svg" alt="" width={16} height={16} />
-          Samebase
-        </a>
+      <footer className="flex min-h-11 items-center justify-center px-2 text-[var(--muted)]">
+        <SamebaseAttribution />
       </footer>
     </main>
   );
