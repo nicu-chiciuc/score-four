@@ -12,8 +12,8 @@ export function SamebaseAttribution() {
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 60 60"
-            width="1cap"
-            height="1cap"
+            width="0.75em"
+            height="0.75em"
             shapeRendering="crispEdges"
             className="inline-block align-baseline"
             aria-hidden="true"
