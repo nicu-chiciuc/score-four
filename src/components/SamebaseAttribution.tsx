@@ -16,8 +16,7 @@ export function SamebaseAttribution() {
           shapeRendering="crispEdges"
           aria-hidden="true"
         >
-          <rect width="60" height="60" fill="#ffffff" />
-          <path d="M6 6h48v48H6z M22 22h16v16H22z" fill="#394447" fillRule="evenodd" />
+          <path d="M6 6h48v48H6z M22 22h16v16H22z" fill="currentColor" fillRule="evenodd" />
         </svg>
         <b>Samebase</b>
       </span>
