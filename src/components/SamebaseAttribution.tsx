@@ -8,18 +8,20 @@ export function SamebaseAttribution() {
     >
       <span className="border-b border-transparent whitespace-nowrap group-hover:border-current">
         Managed with{" "}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 60 60"
-          width={15}
-          height={15}
-          shapeRendering="crispEdges"
-          className="inline-block align-[-0.125em]"
-          aria-hidden="true"
-        >
-          <path d="M6 6h48v48H6z M22 22h16v16H22z" fill="currentColor" fillRule="evenodd" />
-        </svg>{" "}
-        <b>Samebase</b>
+        <b>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 60 60"
+            width="1cap"
+            height="1cap"
+            shapeRendering="crispEdges"
+            className="inline-block align-baseline"
+            aria-hidden="true"
+          >
+            <path d="M0 0h60v60H0z M20 20h20v20H20z" fill="currentColor" fillRule="evenodd" />
+          </svg>{" "}
+          Samebase
+        </b>
       </span>
     </a>
   );
