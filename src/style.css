@@ -63,7 +63,7 @@ p {
   max-width: 1600px;
   min-height: 100svh;
   margin: 0 auto;
-  padding: 0 48px 28px;
+  padding: 0 48px;
 }
 .app-header {
   height: 88px;
@@ -174,7 +174,7 @@ p {
   display: flex;
   justify-content: center;
   gap: 12px;
-  padding: 8px 0 12px;
+  padding: 8px 0;
 }
 .wooden-board {
   position: relative;
@@ -293,7 +293,7 @@ p {
   background: radial-gradient(ellipse at 35% 25%, #a17450, #563320 75%);
 }
 .table .board-viewport {
-  height: clamp(360px, calc(100svh - 345px), 730px);
+  height: clamp(360px, calc(100svh - 346px), 730px);
 }
 .table-footer {
   display: flex;
@@ -600,7 +600,7 @@ input {
 }
 @media (max-width: 800px) {
   .app-shell {
-    padding: 0 22px 20px;
+    padding: 0 22px;
   }
   .app-header {
     height: 80px;
@@ -613,12 +613,12 @@ input {
     max-width: 500px;
   }
   .table .board-viewport {
-    height: clamp(350px, calc(100svh - 320px), 670px);
+    height: clamp(350px, calc(100svh - 364px), 670px);
   }
 }
 @media (max-width: 600px) {
   .app-shell {
-    padding: 0 18px 20px;
+    padding: 0 18px;
   }
   .app-header {
     height: 76px;
@@ -659,9 +659,9 @@ input {
   }
   .lobby-actions {
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     max-width: 280px;
-    margin: 12px auto 0;
+    margin: 0 auto;
   }
   .lobby-actions .secondary-button {
     background: transparent;
@@ -681,11 +681,11 @@ input {
     font-size: 23px;
   }
   .table .board-viewport {
-    height: clamp(330px, calc(100svh - 310px), 610px);
+    height: clamp(330px, calc(100svh - 314px), 610px);
   }
   .table-footer {
     gap: 18px;
-    padding-top: 14px;
+    padding-top: 6px;
     flex-wrap: wrap;
   }
   .table-footer .primary-button {
