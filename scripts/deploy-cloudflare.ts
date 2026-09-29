@@ -5,41 +5,11 @@ import { pathToFileURL } from "node:url";
 
 const modes = {
   deploy: ["deploy"],
-  preview: ["versions", "upload"],
+  preview: ["preview"],
 } as const;
-
-type Mode = keyof typeof modes;
-
-function isMode(value: string | undefined): value is Mode {
-  return value === "deploy" || value === "preview";
-}
-
-function isReservedWranglerFlag(value: string) {
-  return value === "--name" || value.startsWith("--name=") || value === "-n";
-}
 
 function isDryRunFlag(value: string) {
   return value === "--dry-run" || value === "--dry-run=true";
-}
-
-function readWorkerName(env: NodeJS.ProcessEnv) {
-  const workerName = env["WRANGLER_CI_OVERRIDE_NAME"] ?? env["CLOUDFLARE_WORKER_NAME"];
-
-  if (!workerName) {
-    throw new Error(
-      [
-        "Missing Cloudflare Worker name.",
-        "Workers Builds provides WRANGLER_CI_OVERRIDE_NAME automatically.",
-        "For local deploy checks, set CLOUDFLARE_WORKER_NAME.",
-      ].join("\n"),
-    );
-  }
-
-  if (!/^[a-zA-Z0-9-]+$/.test(workerName)) {
-    throw new Error("Cloudflare Worker names can only contain letters, numbers, and dashes.");
-  }
-
-  return workerName;
 }
 
 function run(command: string, args: readonly string[]) {
@@ -72,14 +42,8 @@ export function selectCloudflareDeployPlan(
 ): CloudflareDeployPlan {
   const [modeArg, ...extraArgs] = args;
 
-  if (!isMode(modeArg)) {
+  if (modeArg !== "deploy" && modeArg !== "preview") {
     throw new Error("Usage: node ./scripts/deploy-cloudflare.ts <deploy|preview> [wrangler flags]");
-  }
-
-  if (extraArgs.some(isReservedWranglerFlag)) {
-    throw new Error(
-      "Do not pass Wrangler --name/-n manually. Set CLOUDFLARE_WORKER_NAME or let Workers Builds provide WRANGLER_CI_OVERRIDE_NAME.",
-    );
   }
 
   if (extraArgs.includes("--")) {
@@ -88,13 +52,17 @@ export function selectCloudflareDeployPlan(
     );
   }
 
-  const workerName = readWorkerName(env);
   const isWorkersBuild = env["WORKERS_CI"] === "1" || env["WORKERS_CI"] === "true";
   const isDryRun = extraArgs.some(isDryRunFlag);
+  if (modeArg === "preview" && extraArgs.some((arg) => arg.startsWith("--dry-run"))) {
+    throw new Error(
+      "Worker Previews does not support --dry-run. Use deploy:dry-run for package validation.",
+    );
+  }
 
   return {
     buildArgs: isWorkersBuild ? null : ["run", isDryRun ? "build:app" : "build:cloudflare"],
-    wranglerArgs: [...modes[modeArg], "--name", workerName, ...extraArgs],
+    wranglerArgs: [...modes[modeArg], ...extraArgs],
   };
 }
 

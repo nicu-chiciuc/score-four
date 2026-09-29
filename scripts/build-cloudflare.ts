@@ -4,21 +4,17 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const CONVEX_DEPLOY_KEY = "CONVEX_DEPLOY_KEY";
-const PREVIEW_CONVEX_DEPLOY_KEY = "PREVIEW_CONVEX_DEPLOY_KEY";
 const WORKERS_BUILD_COMMAND = "vp run build:app && node ./scripts/verify-current-branch-head.ts";
 
-type DeployKeyName = typeof CONVEX_DEPLOY_KEY | typeof PREVIEW_CONVEX_DEPLOY_KEY;
 type ConvexDeployPlan =
   | {
       kind: "deploy";
       deployKey: string;
-      deployKeyName: typeof CONVEX_DEPLOY_KEY;
       args: readonly string[];
     }
   | {
       kind: "previewDeploy";
       deployKey: string;
-      deployKeyName: typeof PREVIEW_CONVEX_DEPLOY_KEY;
       args: readonly string[];
     }
   | {
@@ -53,24 +49,20 @@ function isWorkersBuild(env: NodeJS.ProcessEnv) {
   return isEnabled(env["WORKERS_CI"]);
 }
 
-function readDeployKey(args: {
-  env: NodeJS.ProcessEnv;
-  deployKeyName: DeployKeyName;
-  branch: string;
-}) {
-  const deployKey = args.env[args.deployKeyName];
+function readDeployKey(args: { env: NodeJS.ProcessEnv; branch: string }) {
+  const deployKey = args.env[CONVEX_DEPLOY_KEY];
   if (deployKey) {
     return deployKey;
   }
 
-  if (args.deployKeyName === CONVEX_DEPLOY_KEY) {
+  if (args.branch === "main") {
     throw new Error(
       `Set ${CONVEX_DEPLOY_KEY} in Cloudflare Workers build variables for ${args.branch}. Use a Convex production deploy key with exactly deployment:deploy, deployment:env:view, deployment:env:write, and deployment:data:view.`,
     );
   }
 
   throw new Error(
-    `Set ${PREVIEW_CONVEX_DEPLOY_KEY} in Cloudflare Workers build variables for ${args.branch}. Use a Convex project Preview deploy key.`,
+    `Set ${CONVEX_DEPLOY_KEY} in Cloudflare Workers build variables for ${args.branch}. Use a Convex project Preview deploy key.`,
   );
 }
 
@@ -79,32 +71,23 @@ async function ensureConvexAuth(env: NodeJS.ProcessEnv) {
 }
 
 export function selectConvexDeployPlan(env: NodeJS.ProcessEnv): ConvexDeployPlan {
-  const branch = env["WORKERS_CI_BRANCH"];
-
-  if (!branch) {
-    if (isWorkersBuild(env)) {
-      throw new Error(
-        "Set WORKERS_CI_BRANCH in Cloudflare Workers build variables to prevent unintended production Convex deploys.",
-      );
-    }
-
-    if (env[CONVEX_DEPLOY_KEY] || env[PREVIEW_CONVEX_DEPLOY_KEY]) {
-      throw new Error(
-        `Set WORKERS_CI_BRANCH to choose ${CONVEX_DEPLOY_KEY} or ${PREVIEW_CONVEX_DEPLOY_KEY}, or unset both keys for a frontend-only local build.`,
-      );
-    }
-
+  if (!isWorkersBuild(env)) {
     return { kind: "frontendOnly" };
+  }
+
+  const branch = env["WORKERS_CI_BRANCH"];
+  if (!branch) {
+    throw new Error(
+      "Set WORKERS_CI_BRANCH in Cloudflare Workers build variables to prevent unintended production Convex deploys.",
+    );
   }
 
   if (branch !== "main") {
     return {
       kind: "previewDeploy",
-      deployKeyName: PREVIEW_CONVEX_DEPLOY_KEY,
       deployKey: readDeployKey({
         env,
         branch,
-        deployKeyName: PREVIEW_CONVEX_DEPLOY_KEY,
       }),
       args: ["exec", "convex", "deploy", "--preview-name", branch, "--cmd", WORKERS_BUILD_COMMAND],
     };
@@ -112,11 +95,9 @@ export function selectConvexDeployPlan(env: NodeJS.ProcessEnv): ConvexDeployPlan
 
   return {
     kind: "deploy",
-    deployKeyName: CONVEX_DEPLOY_KEY,
     deployKey: readDeployKey({
       env,
       branch,
-      deployKeyName: CONVEX_DEPLOY_KEY,
     }),
     args: ["exec", "convex", "deploy", "--cmd", WORKERS_BUILD_COMMAND],
   };
@@ -126,9 +107,7 @@ export async function main(env: NodeJS.ProcessEnv = process.env) {
   const plan = selectConvexDeployPlan(env);
 
   if (plan.kind === "frontendOnly") {
-    console.warn(
-      `${CONVEX_DEPLOY_KEY} and ${PREVIEW_CONVEX_DEPLOY_KEY} are not set; building static assets without deploying Convex.`,
-    );
+    console.warn("Building static assets without deploying Convex.");
     await run("vp", ["run", "build:app"]);
     return;
   }

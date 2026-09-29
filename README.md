@@ -50,37 +50,26 @@ The core workflow runs on macOS, Linux, and Windows. See
 
 ## Checks and builds
 
-| Command                         | Purpose                                                        |
-| ------------------------------- | -------------------------------------------------------------- |
-| `vp run check`                  | Format, lint, type-check, test, and verify generated redirects |
-| `vp run build`                  | Run the complete Cloudflare build path                         |
-| `vp run deploy:dry-run`         | Validate a production upload without publishing it             |
-| `vp run deploy:preview:dry-run` | Validate a preview upload without publishing it                |
+| Command                 | Purpose                                                        |
+| ----------------------- | -------------------------------------------------------------- |
+| `vp run check`          | Format, lint, type-check, test, and verify generated redirects |
+| `vp run build`          | Run the complete Cloudflare build path                         |
+| `vp run deploy:dry-run` | Validate a production upload without publishing it             |
 
-The dry-run commands need `CLOUDFLARE_WORKER_NAME`.
-
-On macOS or Linux:
-
-```sh
-export CLOUDFLARE_WORKER_NAME=my-worker
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:CLOUDFLARE_WORKER_NAME = "my-worker"
-```
+Use `vp run deploy:dry-run --name <connected-worker-name>` for a production package check.
+Worker Previews has no dry-run mode.
 
 ## Deployment contract
 
+Cloudflare stores a different `CONVEX_DEPLOY_KEY` value on the production and preview triggers.
 Cloudflare Workers Builds runs `pnpm run build` for all branches. It then uses:
 
-| Branch type             | Deploy command            | Convex key                  |
-| ----------------------- | ------------------------- | --------------------------- |
-| `main`                  | `pnpm run deploy`         | `CONVEX_DEPLOY_KEY`         |
-| Non-production branches | `pnpm run deploy:preview` | `PREVIEW_CONVEX_DEPLOY_KEY` |
+| Branch type             | Deploy command            | Convex key          |
+| ----------------------- | ------------------------- | ------------------- |
+| `main`                  | `pnpm run deploy`         | `CONVEX_DEPLOY_KEY` |
+| Non-production branches | `pnpm run deploy:preview` | `CONVEX_DEPLOY_KEY` |
 
-`scripts/build-cloudflare.ts` selects the Convex key from `WORKERS_CI_BRANCH` and fails closed when
+`scripts/build-cloudflare.ts` uses the key from the current build trigger and fails closed when
 the branch identity is missing. `scripts/verify-current-branch-head.ts` prevents an older concurrent
 build from deploying backend code after a newer commit reaches the same branch. `convex deploy
 --cmd` supplies `VITE_CONVEX_URL` to the frontend build, so it is not a Cloudflare build variable.
@@ -93,7 +82,7 @@ and deploy behavior. Use the
 
 - `package.json` defines the supported development, check, build, and deploy commands.
 - `vite.config.ts` defines the TanStack Start SPA and prerender behavior.
-- `wrangler.jsonc` defines Cloudflare static assets, SPA fallback, and preview URLs.
+- `wrangler.jsonc` defines Cloudflare static assets, SPA fallback, and native Worker Previews.
 - `scripts/build-cloudflare.ts` owns the Cloudflare build and Convex deployment selection.
 - `scripts/deploy-cloudflare.ts` owns production, preview, and dry-run uploads.
 - `convex/` contains the backend, schema, authentication, and generated Convex bindings.

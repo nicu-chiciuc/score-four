@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const VP_COMMAND = process.platform === "win32" ? "vp.cmd" : "vp";
 
@@ -54,12 +55,20 @@ function runVp(args: string[], options: RunOptions = {}) {
   });
 }
 
+export function selectConvexEnvironmentArgs(env: NodeJS.ProcessEnv) {
+  const branch = env["WORKERS_CI_BRANCH"];
+  return branch && branch !== "main" ? ["--preview-name", branch] : [];
+}
+
 async function readConvexEnv(name: string, env: NodeJS.ProcessEnv) {
-  const result = await runVp(["exec", "convex", "env", "get", name], {
-    allowFailure: true,
-    env,
-    stdio: "pipe",
-  });
+  const result = await runVp(
+    ["exec", "convex", "env", "get", name, ...selectConvexEnvironmentArgs(env)],
+    {
+      allowFailure: true,
+      env,
+      stdio: "pipe",
+    },
+  );
   if (result.code !== 0) {
     return null;
   }
@@ -85,10 +94,13 @@ function generateAuthKeys() {
 }
 
 async function setConvexEnv(name: string, value: string, env: NodeJS.ProcessEnv) {
-  await runVp(["exec", "convex", "env", "set", "--", name, value], {
-    env,
-    sensitive: true,
-  });
+  await runVp(
+    ["exec", "convex", "env", "set", ...selectConvexEnvironmentArgs(env), "--", name, value],
+    {
+      env,
+      sensitive: true,
+    },
+  );
 }
 
 async function main() {
@@ -110,4 +122,7 @@ async function main() {
   console.log("Convex Auth keys configured.");
 }
 
-await main();
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
+  await main();
+}
