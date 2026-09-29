@@ -6,7 +6,7 @@ This app deploys through Cloudflare Workers Builds. The Cloudflare dashboard run
 
 ## Build variables
 
-In Cloudflare Settings > Builds, set `CONVEX_DEPLOY_KEY` separately for each trigger:
+In Cloudflare Settings > Builds, set `CONVEX_DEPLOY_KEY` separately for Production and Previews Base:
 
 - Production: the Convex production deploy key.
 - Previews Base: the Convex project Preview deploy key.
@@ -61,14 +61,14 @@ Worker name through `WRANGLER_CI_OVERRIDE_NAME`.
 The repository change does not switch the connected Worker. Confirm the repository, Worker, and
 account before the separate, irreversible provider step.
 
-1. Set the trigger-specific `CONVEX_DEPLOY_KEY` values under Settings > Builds.
+1. Set the Production and Previews Base `CONVEX_DEPLOY_KEY` values under Settings > Builds.
 2. Use Settings > Builds > Set up Worker Previews.
 3. Restore `pnpm run build`, `pnpm run deploy`, and `pnpm run deploy:preview` after the switch.
    Keep the current build root and enable non-production branch builds.
 4. Build the migrated preview branch. Check its returned URL, backend URL, and authentication.
    Confirm that production is unchanged.
-5. After verification, remove the obsolete `PREVIEW_CONVEX_DEPLOY_KEY` from both triggers and
-   remove `SAMEBASE_CONVEX_PROJECT` from the preview trigger. Keep the project marker on production.
+5. After verification, remove the obsolete `PREVIEW_CONVEX_DEPLOY_KEY` from Production and Previews Base and
+   remove `SAMEBASE_CONVEX_PROJECT` from Previews Base. Keep the project marker on production.
 
 `wrangler.jsonc` includes an empty `previews` block because this Worker serves static assets.
 Runtime variables and resource bindings do not inherit production values. Any future runtime
