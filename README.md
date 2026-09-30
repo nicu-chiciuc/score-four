@@ -61,16 +61,21 @@ Worker Previews has no dry-run mode.
 
 ## Deployment contract
 
-Cloudflare stores a different `CONVEX_DEPLOY_KEY` value on the production and preview triggers.
 Cloudflare Workers Builds runs `pnpm run build` for all branches. It then uses:
 
-| Branch type             | Deploy command            | Convex key          |
-| ----------------------- | ------------------------- | ------------------- |
-| `main`                  | `pnpm run deploy`         | `CONVEX_DEPLOY_KEY` |
-| Non-production branches | `pnpm run deploy:preview` | `CONVEX_DEPLOY_KEY` |
+| Branch type    | Deploy command            | Builds settings | `CONVEX_DEPLOY_KEY` value  |
+| -------------- | ------------------------- | --------------- | -------------------------- |
+| `main`         | `pnpm run deploy`         | Production      | Production deploy key      |
+| Other branches | `pnpm run deploy:preview` | Previews Base   | Project Preview deploy key |
 
-`scripts/build-cloudflare.ts` uses the key from the current build trigger and fails closed when
-the branch identity is missing. `scripts/verify-current-branch-head.ts` prevents an older concurrent
+`build`, `deploy`, and `deploy:preview` are the stable package-script interface. The deploy scripts
+run Wrangler directly. Run `pnpm run build` before a manual deploy. Local builds only build the
+frontend.
+
+`scripts/build-cloudflare.ts` uses `WORKERS_CI_BRANCH` as the stable Convex preview name.
+`scripts/ensure-convex-auth.ts` creates missing auth keys in that deployment and keeps existing keys
+on rebuilds. A failed auth environment read stops the build.
+`scripts/verify-current-branch-head.ts` prevents an older concurrent
 build from deploying backend code after a newer commit reaches the same branch. `convex deploy
 --cmd` supplies `VITE_CONVEX_URL` to the frontend build, so it is not a Cloudflare build variable.
 
@@ -84,7 +89,7 @@ and deploy behavior. Use the
 - `vite.config.ts` defines the TanStack Start SPA and prerender behavior.
 - `wrangler.jsonc` defines Cloudflare static assets, SPA fallback, and native Worker Previews.
 - `scripts/build-cloudflare.ts` owns the Cloudflare build and Convex deployment selection.
-- `scripts/deploy-cloudflare.ts` owns production, preview, and dry-run uploads.
+- The `deploy` and `deploy:preview` package scripts run Wrangler directly.
 - `convex/` contains the backend, schema, authentication, and generated Convex bindings.
 - `src/` contains the React application and routes.
 

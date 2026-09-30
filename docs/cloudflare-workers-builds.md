@@ -15,7 +15,9 @@ The production key needs `deployment:deploy`, `deployment:env:view`,
 `deployment:env:write`, and `deployment:data:view`. Keep these as build secrets.
 The build reads only `CONVEX_DEPLOY_KEY`. It requires `WORKERS_CI_BRANCH` in Workers Builds.
 Convex supplies `VITE_CONVEX_URL` to the frontend through `convex deploy --cmd`.
-Preview auth environment reads and writes use the branch's `--preview-name` selector.
+The build and auth scripts match the current Samebase base template. Auth environment reads and
+writes use the branch's `--preview-name` selector. Existing `JWT_PRIVATE_KEY` and `JWKS` values
+stay unchanged on rebuilds. A failed environment read stops the build before any auth key write.
 
 ## Build Ordering
 
@@ -47,33 +49,23 @@ Validate the production Worker package without publishing it:
 vp run deploy:dry-run --name <connected-worker-name>
 ```
 
-Worker Previews has no dry-run mode. After provider setup, create a manual preview with:
+Worker Previews has no dry-run mode. After provider setup, build the app before a manual preview:
 
 ```sh
+pnpm run build
 pnpm run deploy:preview --worker-name <connected-worker-name>
 ```
 
 Wrangler `--name` selects the Preview on this command. Workers Builds supplies the parent
 Worker name through `WRANGLER_CI_OVERRIDE_NAME`.
 
-## Switch an existing Worker
+## Migration
 
-The repository change does not switch the connected Worker. Confirm the repository, Worker, and
-account before the separate, irreversible provider step.
+Use the [Samebase Worker Previews migration guide](https://samebase.com/docs/cloudflare-previews-migration)
+to migrate the connected Worker and verify production and preview builds.
 
-1. Set the Production and Previews Base `CONVEX_DEPLOY_KEY` values under Settings > Builds.
-2. Use Settings > Builds > Set up Worker Previews.
-3. Restore `pnpm run build`, `pnpm run deploy`, and `pnpm run deploy:preview` after the switch.
-   Keep the current build root and enable non-production branch builds.
-4. Build the migrated preview branch. Check its returned URL, backend URL, and authentication.
-   Confirm that production is unchanged.
-5. After verification, remove the obsolete `PREVIEW_CONVEX_DEPLOY_KEY` from Production and Previews Base and
-   remove `SAMEBASE_CONVEX_PROJECT` from Previews Base. Keep the project marker on production.
-
-`wrangler.jsonc` includes an empty `previews` block because this Worker serves static assets.
-Runtime variables and resource bindings do not inherit production values. Any future runtime
-binding must use an isolated preview resource. Runtime secrets belong in Previews Base runtime
-configuration and affect newly created Previews.
+This Worker serves static assets. `wrangler.jsonc` has an empty `previews` block and keeps
+`preview_urls` enabled.
 
 ## References
 
