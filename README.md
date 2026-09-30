@@ -56,7 +56,7 @@ The core workflow runs on macOS, Linux, and Windows. See
 | `vp run build`          | Run the complete Cloudflare build path                         |
 | `vp run deploy:dry-run` | Validate a production upload without publishing it             |
 
-Use `vp run deploy:dry-run --name <connected-worker-name>` for a production package check.
+Use `vp run deploy:dry-run --name score-four` for a production package check.
 Worker Previews has no dry-run mode.
 
 ## Deployment contract

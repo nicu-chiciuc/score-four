@@ -46,14 +46,14 @@ A local build does not deploy Convex, even when deployment variables are present
 Validate the production Worker package without publishing it:
 
 ```sh
-vp run deploy:dry-run --name <connected-worker-name>
+vp run deploy:dry-run --name score-four
 ```
 
 Worker Previews has no dry-run mode. After provider setup, build the app before a manual preview:
 
 ```sh
 pnpm run build
-pnpm run deploy:preview --worker-name <connected-worker-name>
+pnpm run deploy:preview --worker-name score-four
 ```
 
 Wrangler `--name` selects the Preview on this command. Workers Builds supplies the parent
