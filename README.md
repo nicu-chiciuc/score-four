@@ -79,8 +79,8 @@ on rebuilds. A failed auth environment read stops the build.
 build from deploying backend code after a newer commit reaches the same branch. `convex deploy
 --cmd` supplies `VITE_CONVEX_URL` to the frontend build, so it is not a Cloudflare build variable.
 
-See [`docs/cloudflare-workers-builds.md`](./docs/cloudflare-workers-builds.md) for the detailed build
-and deploy behavior. Use the
+See the [Worker Previews migration guide](https://samebase.com/docs/cloudflare-previews-migration)
+to switch an existing Worker. Use the
 [do-it-yourself guide](https://samebase.com/docs/do-it-yourself) for the provider dashboard setup.
 
 ## Important files
