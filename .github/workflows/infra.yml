@@ -3,7 +3,9 @@
 # Worker shell, the Builds link, and the Convex keys.
 #
 # Pull request: a plan, read-only, as a check. Push to main: a deploy. Both
-# need the same four secrets. The state is Alchemy's Cloudflare state store.
+# compare against the live providers (--detect-drift), so a deleted key or a
+# changed setting is repaired, not only a changed run file. The state is
+# Alchemy's Cloudflare state store.
 name: infra
 
 on:
@@ -45,7 +47,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: npx alchemy plan --stage prod --adopt --no-input --detailed
+      - run: npx alchemy plan --stage prod --adopt --no-input --detailed --detect-drift
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -59,4 +61,4 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: npx alchemy deploy --stage prod --yes --no-input ${{ inputs.adopt && '--adopt' || '' }}
+      - run: npx alchemy deploy --stage prod --yes --no-input --detect-drift ${{ inputs.adopt && '--adopt' || '' }}
