@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "@effect/platform-node": "^4.0.0",
-    "@samebase/alchemy-cloudflare-workers": "file:vendor/samebase-alchemy-cloudflare-workers-0.0.0.tgz",
+    "@samebase/alchemy-cloudflare-workers": "0.1.0",
     "@samebase/alchemy-convex": "0.1.0",
     "@tanstack/router-plugin": "^1.168.23",
     "@types/node": "^24.0.0",
