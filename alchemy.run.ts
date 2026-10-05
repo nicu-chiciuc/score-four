@@ -3,10 +3,12 @@
 // repository, and the Convex deploy keys that the builds use. It never
 // uploads Worker code; wrangler.jsonc stays the source of truth for that.
 //
-// Run locally with CLOUDFLARE_API_TOKEN (a user token with Workers Scripts
-// edit, Workers Builds Configuration edit, Account Settings read) and the
+// .github/workflows/infra.yml runs it: a plan on every pull request that
+// touches this file, a deploy on main. Locally it needs CLOUDFLARE_API_TOKEN
+// (a user token with Workers Scripts edit, Workers Builds Configuration edit,
+// Secrets Store edit, Account Settings read), CLOUDFLARE_ACCOUNT_ID, and the
 // Convex CLI login:
-//   npx alchemy deploy --adopt
+//   npx alchemy plan --stage prod
 import * as WorkersBuilds from "@samebase/alchemy-cloudflare-workers-builds";
 import * as Convex from "@samebase/alchemy-convex";
 import * as Alchemy from "alchemy";
@@ -31,7 +33,9 @@ export default Alchemy.Stack(
       WorkersBuilds.providers(),
       Convex.providers(),
     ),
-    state: Alchemy.localState(),
+    // State lives in the Cloudflare state store (an encrypted Durable Object in
+    // the account), so the laptop and .github/workflows/infra.yml share it.
+    state: Cloudflare.state(),
   },
   Effect.gen(function* () {
     // Only the name: every other Worker setting stays with wrangler.jsonc.
