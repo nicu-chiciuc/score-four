@@ -114,4 +114,4 @@ Licensed under the [Apache License 2.0](./LICENSE). See
 
 ## Setup stack
 
-`alchemy.run.ts` declares the Worker, its Workers Builds link to this repository, and the Convex deploy keys the builds use. Workers Builds deploys from `wrangler.jsonc`; the stack never uploads code. Run it with `npx alchemy deploy` and a Cloudflare API token in `.env`.
+`alchemy.run.ts` declares the Worker, its Workers Builds link to this repository, and the Convex deploy keys the builds use. Workers Builds deploys from `wrangler.jsonc`; the stack never uploads code. `.github/workflows/infra.yml` runs it: a plan on pull requests that touch the file, a deploy on `main`. Its state is Alchemy's Cloudflare state store. Locally, `npx alchemy plan --stage prod` works with the same four values in `.env`.
