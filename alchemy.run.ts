@@ -47,6 +47,9 @@ export default Alchemy.Stack(
       buildCommand: "pnpm run build",
       deployCommand: "pnpm run deploy",
       previewDeployCommand: "pnpm run deploy:preview",
+      buildCachingEnabled: false,
+      // scripts/build-cloudflare.ts reads CONVEX_DEPLOY_KEY: the production
+      // key on main, the project preview key on every other branch.
       variables: { CONVEX_DEPLOY_KEY: deployKey.deployKey },
       previewVariables: { CONVEX_DEPLOY_KEY: previewKey.previewDeployKey },
     });
