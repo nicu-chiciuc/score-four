@@ -7,7 +7,7 @@
 // edit, Workers Builds Configuration edit, Account Settings read) and the
 // Convex CLI login:
 //   npx alchemy deploy --adopt
-import * as WorkersBuilds from "@samebase/alchemy-cloudflare-workers";
+import * as WorkersBuilds from "@samebase/alchemy-cloudflare-workers-builds";
 import * as Convex from "@samebase/alchemy-convex";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
