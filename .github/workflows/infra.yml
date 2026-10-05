@@ -47,7 +47,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: npx alchemy plan --stage prod --adopt --no-input --detailed --detect-drift
+      - run: npx alchemy plan --stage prod --adopt --no-input --detailed
+      # Read-only: reports resources that changed outside the stack.
+      - run: npx alchemy drift --stage prod --no-input
 
   deploy:
     if: github.event_name != 'pull_request'
