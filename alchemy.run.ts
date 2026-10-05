@@ -41,9 +41,24 @@ export default Alchemy.Stack(
     // Only the name: every other Worker setting stays with wrangler.jsonc.
     const worker = yield* WorkersBuilds.Worker("Worker", { name: WORKER_NAME });
 
+    // Convex lists each key under its name plus a hash of the resource, such
+    // as "workers-builds-3f2a1b0c9d8e". A key cannot change, so a changed prop
+    // replaces it, and the Builds variables below take the new secret. A
+    // replaced key made by alchemy-convex 0.1.x stays in Convex with a
+    // warning: delete it in the Convex dashboard.
+    //
+    // The production key gets only what scripts/build-cloudflare.ts needs.
+    // Without allowedActions, Convex grants every deployment action,
+    // including data writes and backup deletes.
     const deployKey = yield* Convex.DeployKey("DeployKey", {
       deployment: CONVEX_PROD_DEPLOYMENT,
       name: "workers-builds",
+      allowedActions: [
+        "deployment:deploy",
+        "deployment:env:view",
+        "deployment:env:write",
+        "deployment:data:view",
+      ],
     });
     const previewKey = yield* Convex.PreviewDeployKey("PreviewDeployKey", {
       projectId: CONVEX_PROJECT_ID,
