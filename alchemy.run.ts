@@ -15,8 +15,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 const WORKER_NAME = "score-four";
+const CONVEX_TEAM_ID = 38516;
 const CONVEX_PROJECT_ID = 2814366;
 const CONVEX_PROD_DEPLOYMENT = "insightful-crow-151";
+
+// Samebase reads this build variable to link the Worker to its Convex
+// project in the dashboard. Same format Samebase writes itself.
+const SAMEBASE_CONVEX_PROJECT = `version=1&teamId=${CONVEX_TEAM_ID}&projectId=${CONVEX_PROJECT_ID}`;
 
 export default Alchemy.Stack(
   "ScoreFour",
@@ -50,7 +55,10 @@ export default Alchemy.Stack(
       buildCachingEnabled: false,
       // scripts/build-cloudflare.ts reads CONVEX_DEPLOY_KEY: the production
       // key on main, the project preview key on every other branch.
-      variables: { CONVEX_DEPLOY_KEY: deployKey.deployKey },
+      variables: {
+        CONVEX_DEPLOY_KEY: deployKey.deployKey,
+        SAMEBASE_CONVEX_PROJECT,
+      },
       previewVariables: { CONVEX_DEPLOY_KEY: previewKey.previewDeployKey },
     });
 
