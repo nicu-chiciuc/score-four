@@ -10,6 +10,8 @@ overrides:
   nanoid: 3.3.18
   postcss: "^8.5.23"
   sharp: "^0.35.4"
+  # GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr: oxfmt 0.60.0 (vite-plus 0.2.7) pins tinypool 2.1.0.
+  tinypool: 2.1.2
   undici: 7.29.1
   vite: "catalog:"
   vitest: "catalog:"
