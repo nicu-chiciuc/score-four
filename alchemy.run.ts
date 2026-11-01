@@ -1,86 +1,93 @@
-// Setup stack for Score Four. It declares what already exists and keeps
-// Workers Builds as the deployer: the Worker shell, its Builds link to this
-// repository, and the Convex deploy keys that the builds use. It never
-// uploads Worker code; wrangler.jsonc stays the source of truth for that.
+// Stage `prod` is the production deployment of the Convex project of this
+// repository. Any other stage, such as `pr-42` for a pull request, is a
+// preview deployment named after the stage, which `alchemy destroy` deletes.
+// The push is the `deploy` script: convex-hosting builds the site, sets the
+// Convex Auth keys of a new deployment, uploads the site, and pushes the
+// functions.
 //
-// .github/workflows/infra.yml runs it: a plan on every pull request that
-// touches this file, a deploy on main. Locally it needs CLOUDFLARE_API_TOKEN
-// (a user token with Workers Scripts edit, Workers Builds Configuration edit,
-// Secrets Store edit, Account Settings read), CLOUDFLARE_ACCOUNT_ID, and the
-// Convex CLI login:
-//   npx alchemy plan --stage prod
-import * as WorkersBuilds from "@samebase/alchemy-cloudflare-workers-builds";
+// The stack is named after the repository, `owner/name`. The state of every
+// stage is in the `alchemy-state-store` project of the team, which
+// Convex.state() creates on the first run. Every run needs the team token
+// CONVEX_ACCESS_TOKEN, or a Convex CLI login (`npx convex login`) on a laptop;
+// it mints the deploy keys itself.
+import { execFileSync } from "node:child_process";
+import * as GitHub from "@alchemy.run/github";
 import * as Convex from "@samebase/alchemy-convex";
 import * as Alchemy from "alchemy";
-import * as Cloudflare from "alchemy/Cloudflare";
+import * as Output from "alchemy/Output";
+import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-const WORKER_NAME = "score-four";
-const CONVEX_TEAM_ID = 38516;
-const CONVEX_PROJECT_ID = 2814366;
-const CONVEX_PROD_DEPLOYMENT = "insightful-crow-151";
+/** The Convex team that holds the project and the state. */
+const team = "nicu";
 
-// Samebase reads this build variable to link the Worker to its Convex
-// project in the dashboard. Same format Samebase writes itself.
-const SAMEBASE_CONVEX_PROJECT = `version=1&teamId=${CONVEX_TEAM_ID}&projectId=${CONVEX_PROJECT_ID}`;
+/** The Convex project of this app, which predates the stack. */
+const projectSlug = "score-four";
+const projectId = 2814366;
+
+/** The GitHub repository, `owner/name`: GITHUB_REPOSITORY in Actions, else the origin remote. */
+const repository =
+  process.env["GITHUB_REPOSITORY"] ??
+  /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(
+    execFileSync("git", ["remote", "get-url", "origin"], {
+      encoding: "utf8",
+    }).trim(),
+  )?.[1];
+if (repository === undefined) {
+  throw new Error("Set GITHUB_REPOSITORY to owner/name: the origin remote names no repository.");
+}
 
 export default Alchemy.Stack(
-  "ScoreFour",
+  repository,
   {
-    providers: Layer.mergeAll(
-      Cloudflare.providers(),
-      WorkersBuilds.providers(),
-      Convex.providers(),
-    ),
-    // State lives in the Cloudflare state store (an encrypted Durable Object in
-    // the account), so the laptop and .github/workflows/infra.yml share it.
-    state: Cloudflare.state(),
+    providers: Layer.mergeAll(GitHub.providers(), Convex.providers()),
+    state: Convex.state({ team }),
   },
   Effect.gen(function* () {
-    // Only the name: every other Worker setting stays with wrangler.jsonc.
-    const worker = yield* WorkersBuilds.Worker("Worker", { name: WORKER_NAME });
-
-    // Convex lists each key under its name plus a hash of the resource, such
-    // as "workers-builds-3f2a1b0c9d8e". A key cannot change, so a changed prop
-    // replaces it, and the Builds variables below take the new secret. A
-    // replaced key made by alchemy-convex 0.1.x stays in Convex with a
-    // warning: delete it in the Convex dashboard.
-    //
-    // The production key gets only what scripts/build-cloudflare.ts needs.
-    // Without allowedActions, Convex grants every deployment action,
-    // including data writes and backup deletes.
-    const deployKey = yield* Convex.DeployKey("DeployKey", {
-      deployment: CONVEX_PROD_DEPLOYMENT,
-      name: "workers-builds",
-      allowedActions: [
-        "deployment:deploy",
-        "deployment:env:view",
-        "deployment:env:write",
-        "deployment:data:view",
+    const { stage } = yield* Alchemy.Stack;
+    const source = {
+      path: "./convex",
+      command: ["node", "--run", "deploy"],
+      // The build inputs. The functions, package.json, and the lockfile are always hashed.
+      include: [
+        "src/**",
+        "public/**",
+        "scripts/**",
+        "alchemy.run.ts",
+        "vite.config.ts",
+        "tsconfig*.json",
       ],
-    });
-    const previewKey = yield* Convex.PreviewDeployKey("PreviewDeployKey", {
-      projectId: CONVEX_PROJECT_ID,
-      name: "workers-builds",
-    });
+    } satisfies Convex.Source;
+    // The stage `prod` owns the project, which holds the production data. With `slug`, the resource
+    // never creates or renames a project, and it keeps the default removal policy, retain:
+    // `alchemy destroy --stage prod` forgets the project, and Convex keeps it. A preview names the
+    // project by id, so it does not need the state of `prod`.
+    if (stage === "prod") {
+      yield* Convex.Project("Project", { team, slug: projectSlug });
+    }
+    const project = { projectId };
+    const deployment =
+      stage === "prod"
+        ? yield* Convex.Deployment("Deployment", { project, type: "prod", source })
+        : yield* Convex.Deployment("Deployment", {
+            project,
+            type: "preview",
+            name: stage,
+            source,
+          }).pipe(RemovalPolicy.destroy());
 
-    const builds = yield* WorkersBuilds.Repository("Builds", {
-      worker: worker.workerId,
-      repository: { owner: "nicu-chiciuc", name: "score-four", branch: "main" },
-      buildCommand: "pnpm run build",
-      deployCommand: "pnpm run deploy",
-      previewDeployCommand: "pnpm run deploy:preview",
-      buildCachingEnabled: false,
-      // scripts/build-cloudflare.ts reads CONVEX_DEPLOY_KEY: the production
-      // key on main, the project preview key on every other branch.
-      variables: {
-        CONVEX_DEPLOY_KEY: deployKey.deployKey,
-        SAMEBASE_CONVEX_PROJECT,
-      },
-      previewVariables: { CONVEX_DEPLOY_KEY: previewKey.previewDeployKey },
-    });
-
-    return { url: worker.url, previewsEnabled: builds.previewsEnabled };
+    const github = yield* GitHub.GitHubEnv;
+    if (github?.pr) {
+      // Retained: a closed pull request keeps the comment, as a record of what was deployed; the
+      // preview's URL stops answering when the stage is destroyed.
+      yield* GitHub.Comment("PreviewComment", {
+        owner: github.owner,
+        repository: github.repository,
+        issueNumber: github.pr,
+        body: Output.interpolate`Preview \`${stage}\`: ${deployment.siteUrl}`,
+      }).pipe(RemovalPolicy.retain());
+    }
+    return { url: deployment.siteUrl };
   }),
 );
