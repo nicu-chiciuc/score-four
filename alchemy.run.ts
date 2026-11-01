@@ -22,9 +22,8 @@ import * as Layer from "effect/Layer";
 /** The Convex team that holds the project and the state. */
 const team = "nicu";
 
-/** The Convex project of this app, which predates the stack. */
+/** The slug of the Convex project of this app, which predates the stack. */
 const projectSlug = "score-four";
-const projectId = 2814366;
 
 /** The GitHub repository, `owner/name`: GITHUB_REPOSITORY in Actions, else the origin remote. */
 const repository =
@@ -61,12 +60,12 @@ export default Alchemy.Stack(
     } satisfies Convex.Source;
     // The stage `prod` owns the project, which holds the production data. With `slug`, the resource
     // never creates or renames a project, and it keeps the default removal policy, retain:
-    // `alchemy destroy --stage prod` forgets the project, and Convex keeps it. A preview names the
-    // project by id, so it does not need the state of `prod`.
-    if (stage === "prod") {
-      yield* Convex.Project("Project", { team, slug: projectSlug });
-    }
-    const project = { projectId };
+    // `alchemy destroy --stage prod` forgets the project, and Convex keeps it. A preview stage reads
+    // the project from the state of `prod`.
+    const project =
+      stage === "prod"
+        ? yield* Convex.Project("Project", { team, slug: projectSlug })
+        : yield* Convex.Project.ref("Project", { stage: "prod" });
     const deployment =
       stage === "prod"
         ? yield* Convex.Deployment("Deployment", { project, type: "prod", source })
