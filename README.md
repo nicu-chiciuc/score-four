@@ -64,7 +64,7 @@ GitHub Actions deploys with [Alchemy](https://alchemy.run) and
 `alchemy.run.ts` is the stack, and `.github/workflows/alchemy.yml` runs it:
 
 - A push to `main` deploys the stage `prod`, the production deployment `insightful-crow-151`, which
-  serves https://insightful-crow-151.convex.site.
+  serves https://insightful-crow-151.eu-west-1.convex.site.
 - A pull request from this repository deploys the stage `pr-<number>`, a Convex preview with that
   name, and comments its URL on the pull request. Closing the pull request destroys the stage and
   deletes the preview.
