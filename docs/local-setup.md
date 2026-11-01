@@ -1,7 +1,7 @@
 # Local setup
 
 Use this when you want to run the app from your own computer instead of only
-through Cloudflare.
+through a deployed preview.
 
 ## Install Vite+
 
@@ -37,6 +37,19 @@ The dev script also creates Convex Auth JWT keys in that development deployment
 if they are missing.
 
 Open the local URL printed by Vite.
+
+## First run
+
+On a fresh clone, the first push of `vp run dev` fails: `convex/http.ts` imports
+`.convex-hosting/version.js`, and only a deploy writes that file. Keep `vp run dev`
+running and run this in a second terminal:
+
+```sh
+vp run deploy:dev
+```
+
+It builds the app, uploads the site to the development deployment, writes the version
+file, and pushes. Stop `vp run dev` and start it again; it works as usual from then on.
 
 ## Run worktree mode
 

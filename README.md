@@ -16,7 +16,8 @@ inside the repository.
 - React 19 and TanStack Start in SPA mode
 - Convex for the real-time backend, database, and guest authentication
 - Three.js for the wooden board, lighting, and camera controls
-- Cloudflare Workers Static Assets for delivery
+- [convex-hosting](https://github.com/samebase/convex-hosting) for delivery from the Convex
+  deployment, with Cloudflare's rules for the files
 - shadcn/ui primitives for the user interface
 - Vite+ for development, formatting, linting, tests, and builds
 - Node.js 24 for application and automation code
@@ -50,46 +51,40 @@ The core workflow runs on macOS, Linux, and Windows. See
 
 ## Checks and builds
 
-| Command                 | Purpose                                                        |
-| ----------------------- | -------------------------------------------------------------- |
-| `vp run check`          | Format, lint, type-check, test, and verify generated redirects |
-| `vp run build`          | Run the complete Cloudflare build path                         |
-| `vp run deploy:dry-run` | Validate a production upload without publishing it             |
+| Command             | Purpose                                                        |
+| ------------------- | -------------------------------------------------------------- |
+| `vp run check`      | Format, lint, type-check, test, and verify generated redirects |
+| `vp run build`      | Run the check, then build the site into `dist/client`          |
+| `vp run deploy:dev` | Build and deploy to your development deployment                |
 
-Use `vp run deploy:dry-run --name score-four` for a production package check.
-Worker Previews has no dry-run mode.
+## Deployment
 
-## Deployment contract
+GitHub Actions deploys with [Alchemy](https://alchemy.run) and
+[`@samebase/alchemy-convex`](https://www.npmjs.com/package/@samebase/alchemy-convex).
+`alchemy.run.ts` is the stack, and `.github/workflows/alchemy.yml` runs it:
 
-Cloudflare Workers Builds runs `pnpm run build` for all branches. It then uses:
+- A push to `main` deploys the stage `prod`, the production deployment `insightful-crow-151`, which
+  serves https://insightful-crow-151.convex.site.
+- A pull request from this repository deploys the stage `pr-<number>`, a Convex preview with that
+  name, and comments its URL on the pull request. Closing the pull request destroys the stage and
+  deletes the preview.
 
-| Branch type    | Deploy command            | Builds settings | `CONVEX_DEPLOY_KEY` value  |
-| -------------- | ------------------------- | --------------- | -------------------------- |
-| `main`         | `pnpm run deploy`         | Production      | Production deploy key      |
-| Other branches | `pnpm run deploy:preview` | Previews Base   | Project Preview deploy key |
+The stack runs `pnpm run deploy` only when the functions, the build inputs, `package.json`, or the
+lockfile changed, with a deploy key that it creates for that push and deletes after it. Convex then
+serves the site next to the backend. Deploy with this script, not with a plain `npx convex deploy`,
+which pushes no site version. `scripts/ensure-convex-auth.ts` runs inside the deploy: it creates
+missing auth keys in the deployment and keeps existing keys.
 
-`build`, `deploy`, and `deploy:preview` are the stable package-script interface. The deploy scripts
-run Wrangler directly. Run `pnpm run build` before a manual deploy. Local builds only build the
-frontend.
-
-`scripts/build-cloudflare.ts` uses `WORKERS_CI_BRANCH` as the stable Convex preview name.
-`scripts/ensure-convex-auth.ts` creates missing auth keys in that deployment and keeps existing keys
-on rebuilds. A failed auth environment read stops the build.
-`scripts/verify-current-branch-head.ts` prevents an older concurrent
-build from deploying backend code after a newer commit reaches the same branch. `convex deploy
---cmd` supplies `VITE_CONVEX_URL` to the frontend build, so it is not a Cloudflare build variable.
-
-See the [Worker Previews migration guide](https://samebase.com/docs/cloudflare-previews-migration)
-to switch an existing Worker. Use the
-[do-it-yourself guide](https://samebase.com/docs/do-it-yourself) for the provider dashboard setup.
+The state of every stage is in the `alchemy-state-store` project of the Convex team `nicu`, under
+the stack name `nicu-chiciuc/score-four`. Every run needs one repository secret,
+`CONVEX_ACCESS_TOKEN`, a team access token.
 
 ## Important files
 
 - `package.json` defines the supported development, check, build, and deploy commands.
 - `vite.config.ts` defines the TanStack Start SPA and prerender behavior.
-- `wrangler.jsonc` defines Cloudflare static assets, SPA fallback, and native Worker Previews.
-- `scripts/build-cloudflare.ts` owns the Cloudflare build and Convex deployment selection.
-- The `deploy` and `deploy:preview` package scripts run Wrangler directly.
+- `alchemy.run.ts` defines the production and preview deployments.
+- The `deploy` script in `package.json` sets the static file and SPA fallback rules.
 - `convex/` contains the backend, schema, authentication, and generated Convex bindings.
 - `src/` contains the React application and routes.
 
@@ -111,7 +106,3 @@ and update `THIRD_PARTY_NOTICES.md` when its third-party material changes.
 
 Licensed under the [Apache License 2.0](./LICENSE). See
 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for included third-party material.
-
-## Setup stack
-
-`alchemy.run.ts` declares the Worker, its Workers Builds link to this repository, and the Convex deploy keys the builds use. Workers Builds deploys from `wrangler.jsonc`; the stack never uploads code. `.github/workflows/infra.yml` runs it: a plan on pull requests that touch the file, a deploy on `main`. Its state is Alchemy's Cloudflare state store. Locally, `npx alchemy plan --stage prod` works with the same values in `.env`. The state store itself is created once per Cloudflare account with `npx alchemy provider cloudflare bootstrap`.
