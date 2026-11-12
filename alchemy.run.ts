@@ -19,9 +19,6 @@ import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-/** The Convex team that holds the project and the state. */
-const team = "nicu";
-
 /** The slug of the Convex project of this app, which predates the stack. */
 const projectSlug = "score-four";
 
@@ -41,7 +38,7 @@ export default Alchemy.Stack(
   repository,
   {
     providers: Layer.mergeAll(GitHub.providers(), Convex.providers()),
-    state: Convex.state({ team }),
+    state: Convex.withRunRecord(Convex.state()),
   },
   Effect.gen(function* () {
     const { stage } = yield* Alchemy.Stack;
@@ -64,7 +61,7 @@ export default Alchemy.Stack(
     // the project from the state of `prod`.
     const project =
       stage === "prod"
-        ? yield* Convex.Project("Project", { team, slug: projectSlug })
+        ? yield* Convex.Project("Project", { slug: projectSlug })
         : yield* Convex.Project.ref("Project", { stage: "prod" });
     const deployment =
       stage === "prod"
